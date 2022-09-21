@@ -1,0 +1,240 @@
+{
+  "manifestVersion": "3.2",
+  "admin": {
+    "address": "0x2e999B6278488eF6553Cd088f1374Ee24BeE5E10",
+    "txHash": "0x64c9462d8edf7fceb9fe3eeb2d406ca16239af1817d5b75214e1fc72b25def62"
+  },
+  "proxies": [
+    {
+      "address": "0x17FC06A8dbB5A5838d6738E26187e6Cea08C32B3",
+      "txHash": "0x57f09e646b6d2d8e65662c258c68df42c3fc38fed241797f8397c6b52fa81a7c",
+      "kind": "transparent"
+    }
+  ],
+  "impls": {
+    "5c2dd3f91d20f5b564743690b8cf5df0d1c0a6ce8c1fb17d1a193140fcf931f5": {
+      "address": "0xD6aebe931834065976DAc185e7647aBcb4CE0b81",
+      "txHash": "0xf3129a01983de50ad051197f6a47e6b247dab9714b9614deb4d65bfdf0b82984",
+      "layout": {
+        "storage": [
+          {
+            "label": "_initialized",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:39"
+          },
+          {
+            "label": "_initializing",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_bool",
+            "contract": "Initializable",
+            "src": "@openzeppelin\\contracts-upgradeable\\proxy\\utils\\Initializable.sol:44"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_array(t_uint256)50_storage",
+            "contract": "ContextUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\utils\\ContextUpgradeable.sol:36"
+          },
+          {
+            "label": "_owner",
+            "offset": 0,
+            "slot": "51",
+            "type": "t_address",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:22"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "52",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "OwnableUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\access\\OwnableUpgradeable.sol:87"
+          },
+          {
+            "label": "_status",
+            "offset": 0,
+            "slot": "101",
+            "type": "t_uint256",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\ReentrancyGuardUpgradeable.sol:38"
+          },
+          {
+            "label": "__gap",
+            "offset": 0,
+            "slot": "102",
+            "type": "t_array(t_uint256)49_storage",
+            "contract": "ReentrancyGuardUpgradeable",
+            "src": "@openzeppelin\\contracts-upgradeable\\security\\ReentrancyGuardUpgradeable.sol:74"
+          },
+          {
+            "label": "shirtNFTAddress",
+            "offset": 0,
+            "slot": "151",
+            "type": "t_address",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:21"
+          },
+          {
+            "label": "shippingFee",
+            "offset": 0,
+            "slot": "152",
+            "type": "t_uint256",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:23"
+          },
+          {
+            "label": "eachShirtFee",
+            "offset": 0,
+            "slot": "153",
+            "type": "t_uint256",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:24"
+          },
+          {
+            "label": "percentRoyaltyFee",
+            "offset": 0,
+            "slot": "154",
+            "type": "t_uint256",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:25"
+          },
+          {
+            "label": "isWhitelistNFT",
+            "offset": 0,
+            "slot": "155",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:28"
+          },
+          {
+            "label": "ownerOfNFT",
+            "offset": 0,
+            "slot": "156",
+            "type": "t_mapping(t_address,t_address)",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:29"
+          },
+          {
+            "label": "_shirtTokenId",
+            "offset": 0,
+            "slot": "157",
+            "type": "t_uint256",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:38"
+          },
+          {
+            "label": "indexToShirt",
+            "offset": 0,
+            "slot": "158",
+            "type": "t_mapping(t_uint256,t_struct(Shirt)5404_storage)",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:39"
+          },
+          {
+            "label": "buyerToShirtIndexs",
+            "offset": 0,
+            "slot": "159",
+            "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:40"
+          },
+          {
+            "label": "balances",
+            "offset": 0,
+            "slot": "160",
+            "type": "t_mapping(t_address,t_uint256)",
+            "contract": "Store",
+            "src": "contracts\\Store.sol:42"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_array(t_address)dyn_storage": {
+            "label": "address[]",
+            "numberOfBytes": "32"
+          },
+          "t_array(t_uint256)49_storage": {
+            "label": "uint256[49]",
+            "numberOfBytes": "1568"
+          },
+          "t_array(t_uint256)50_storage": {
+            "label": "uint256[50]",
+            "numberOfBytes": "1600"
+          },
+          "t_array(t_uint256)dyn_storage": {
+            "label": "uint256[]",
+            "numberOfBytes": "32"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_mapping(t_address,t_address)": {
+            "label": "mapping(address => address)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_array(t_uint256)dyn_storage)": {
+            "label": "mapping(address => uint256[])",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_uint256)": {
+            "label": "mapping(address => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_struct(Shirt)5404_storage)": {
+            "label": "mapping(uint256 => struct Store.Shirt)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Shirt)5404_storage": {
+            "label": "struct Store.Shirt",
+            "members": [
+              {
+                "label": "originalNFTs",
+                "type": "t_array(t_address)dyn_storage",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "originalTokenIds",
+                "type": "t_array(t_uint256)dyn_storage",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "buyer",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "2"
+              },
+              {
+                "label": "shirtTokenId",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "3"
+              }
+            ],
+            "numberOfBytes": "128"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          }
+        }
+      }
+    }
+  }
+}
