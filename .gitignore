@@ -125,3 +125,10 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+#contract
+artifacts
+cache
+test-results
+typechain-types
+.openzeppelin
