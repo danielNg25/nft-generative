@@ -1,28 +1,29 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.9;
+pragma solidity 0.8.16;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-
-import "./interfaces/INFT.sol";
-
-contract NFT is
+contract NFTMinter is
     ERC721,
+    ERC721URIStorage,
     ERC721Enumerable,
-    INFT,
+    ERC721Burnable,
     Ownable
 {
     // Base URI
     string private _baseUri;
 
+    // Token fee
+    uint256 public tokenFee;
 
-    mapping (address => bool) private _minter;
+    mapping (address => bool) public minters;
 
-    event AddMinter(address indexed minter);
-    event RemoveMinter(address indexed minter);
+    event MinterSet(address indexed minter, bool status);
 
     constructor(string memory _name, string memory _symbol, string memory baseUri)
         ERC721(_name, _symbol)
@@ -30,13 +31,9 @@ contract NFT is
         _setBaseURI(baseUri);
     }
 
-    modifier onlyMinter(){
-        require(_minter[msg.sender], "Restrict to Minter");
+    modifier onlyMinter{
+        require (minters[msg.sender], "Not minter");
         _;
-    }
-
-    function isMinter(address _account) public view returns(bool){
-        return _minter[_account];
     }
 
     function _beforeTokenTransfer(
@@ -54,7 +51,7 @@ contract NFT is
     function tokenURI(uint256 tokenId)
         public
         view
-        override(ERC721)
+        override(ERC721, ERC721URIStorage)
         returns (string memory)
     {
         return super.tokenURI(tokenId);
@@ -63,7 +60,7 @@ contract NFT is
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable, IERC165)
+        override(ERC721, ERC721Enumerable)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
@@ -81,50 +78,37 @@ contract NFT is
         _setBaseURI(baseUri);
     }
 
-    // /**
-    //  * @dev Function to safely mint tokens.
-    //  * @param receivers The address that will receive the minted token.
-    //  * @param uris The uri to mint.
-    //  * @return A boolean that indicates if the operation was successful.
-    //  */
-    // function safeMint(
-    //     address[] memory receivers,
-    //     string[] memory uris
-    // ) public onlyMinter returns (bool) {
-    //     require(
-    //         receivers.length > 0 &&
-    //             receivers.length == uris.length, 
-    //         "Invalid input length"
-    //     );
-
-    //     for (uint256 i = 0; i < receivers.length; i++) {
-    //         uint256 tokenId = totalSupply() + 1;
-    //         _safeMint(receivers[i], tokenId);
-    //     }
-    //     return true;
-    // }
-
     /**
      * @dev Function to safely mint tokens.
-     * @param receiver The address that will receive the minted token.
-     * @param tokenId The tokenId of minting NFT.
+     * @param receivers The address that will receive the minted token.
+     * @param uris The uri to mint.
      * @return A boolean that indicates if the operation was successful.
      */
-    function safeMint(
-        address receiver,
-        uint256 tokenId
+    function mint(
+        address[] memory receivers,
+        string[] memory uris
     ) public onlyMinter returns (bool) {
-        _safeMint(receiver, tokenId);
+        require(
+            receivers.length > 0 &&
+                receivers.length == uris.length, 
+            "Invalid input length"
+        );
+
+        for (uint256 i = 0; i < receivers.length; i++) {
+            uint256 tokenId = totalSupply() + 1;
+            _safeMint(receivers[i], tokenId);
+            _setTokenURI(tokenId, uris[i]);
+        }
         return true;
     }
-    
+
     /**
      * @dev Burns a specific ERC721 token.
      * @param tokenId uint256 id of the ERC721 token to be burned.
      */
     function _burn(uint256 tokenId)
         internal
-        override(ERC721)
+        override(ERC721, ERC721URIStorage)
     {
         //solhint-disable-next-line max-line-length
         require(
@@ -154,13 +138,9 @@ contract NFT is
         return tokens;
     }
 
-    /**
-     * @dev Sets minter status for specific address
-     * only minter can mint this NFT
-     * @param account address to set status
-     * @param _isMinter status to set for address
-     */
-    function setMinterStatus(address account, bool _isMinter) external onlyOwner{
-        _minter[account] = _isMinter;
+    function setMinterStatus(address account, bool status) external onlyOwner{
+        require (minters[account] != status, "Status set");
+        minters[account] = status;
+        emit MinterSet (account, status);
     }
 }

@@ -41,12 +41,12 @@ const config: HardhatUserConfig = {
         },
     },
     etherscan: {
-        apiKey: `${process.env.ETHERSCAN_KEY}`,
+        apiKey: `${process.env.POLYGONSCAN_KEY}`,
     },
     solidity: {
         compilers: [
             {
-                version: "0.8.9",
+                version: "0.8.16",
                 settings: {
                     optimizer: {
                         enabled: true,

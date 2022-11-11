@@ -3,51 +3,55 @@ import * as fs from "fs";
 import { Signer } from "ethers";
 const ethers = hre.ethers;
 const upgrades = hre.upgrades;
-import { NFT__factory } from "../typechain-types/factories/contracts/NFT__factory";
-import { Store__factory } from "../typechain-types/factories/contracts/Store__factory";
+import { CollectionController__factory } from "../typechain-types/factories/contracts/CollectionController__factory";
+import { NFT__factory } from "../typechain-types/factories/contracts/token/NFT__factory";
+import { ERC20Token__factory } from "../typechain-types/factories/contracts/token/MockERC20.sol/ERC20Token__factory";
 
-import { NFT } from "../typechain-types/contracts/NFT";
-import { Store } from "../typechain-types/contracts/Store";
+import { NFT } from "../typechain-types/contracts/token/NFT";
+import { CollectionController } from "../typechain-types/contracts/CollectionController";
+import { ERC20Token } from "../typechain-types/contracts/token/MockERC20.sol/ERC20Token";
+
+import { parseEther } from "ethers/lib/utils";
+
 async function main() {
     //Loading accounts
     const accounts: Signer[] = await ethers.getSigners();
-    const addresses = accounts.map(async (item) => await item.getAddress());
-    const admin = addresses[0];
+    const admin = await accounts[0].getAddress();
 
     //Loading contracts' factory
-    const NFT: NFT__factory = <NFT__factory>await ethers.getContractFactory("NFT");
-    const Store: Store__factory = <Store__factory>await ethers.getContractFactory("Store");
+    const ERC20Token: ERC20Token__factory = <ERC20Token__factory>await ethers.getContractFactory("ERC20Token");
+    const CollectionController: CollectionController__factory = <CollectionController__factory>(
+        await ethers.getContractFactory("CollectionController")
+    );
 
     // Deploy contracts
     console.log("==================================================================");
     console.log("DEPLOY CONTRACTS");
     console.log("==================================================================");
 
-    const nft: NFT = <NFT>await NFT.deploy("NFT test", "NFT", "");
-    await nft.deployed();
-    console.log("NFT deployed at: ", nft.address);
+    console.log("ACCOUNT: " + admin);
 
-    const store: Store = <Store>(
-        await upgrades.deployProxy(Store, [nft.address, "1000000000000000", "10000000000000000", "100"])
+    const mockToken: ERC20Token = <ERC20Token>await ERC20Token.deploy();
+    await mockToken.deployed();
+    console.log("Mock Token deployed at: ", mockToken.address);
+
+    await mockToken.mint(admin, parseEther("10"));
+
+    const controller: CollectionController = <CollectionController>(
+        await upgrades.deployProxy(CollectionController, [admin, admin])
     );
-    await store.deployed();
-    console.log("Store deployed at: ", store.address);
-    const storeVerify = await upgrades.erc1967.getImplementationAddress(store.address);
-    console.log("Store verify: ", storeVerify);
+    await controller.deployed();
+    console.log("Controller deployed at: ", controller.address);
+    const controllerVerify = await upgrades.erc1967.getImplementationAddress(controller.address);
+    console.log("Controller verify: ", controllerVerify);
 
     const contractAddress = {
-        nft: nft.address,
-        store: store.address,
+        mockToken: mockToken.address,
+        controller: controller.address,
+        controllerVerify: controllerVerify,
     };
 
     fs.writeFileSync("contracts.json", JSON.stringify(contractAddress));
-
-    const contractVerifyAddress = {
-        nft: nft.address,
-        store: storeVerify,
-    };
-
-    fs.writeFileSync("contractVerify.json", JSON.stringify(contractVerifyAddress));
 }
 
 // We recommend this pattern to be able to use async/await everywhere

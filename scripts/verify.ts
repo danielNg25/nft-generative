@@ -1,19 +1,19 @@
 import * as hre from "hardhat";
-import * as contracts from "../contractVerify.json";
+import * as contracts from "../contracts.json";
 
 async function main() {
-    try {
-        await hre.run("verify:verify", {
-            address: contracts.nft,
-            constructorArguments: ["NFT test", "NFT", ""],
-        });
-    } catch (err) {
-        console.log("err >>", err);
-    }
+    // try {
+    //     await hre.run("verify:verify", {
+    //         address: contracts.mockToken,
+    //         constructorArguments: [],
+    //     });
+    // } catch (err) {
+    //     console.log("err >>", err);
+    // }
 
     try {
         await hre.run("verify:verify", {
-            address: contracts.store,
+            address: contracts.controllerVerify,
             hre,
         });
     } catch (err) {
