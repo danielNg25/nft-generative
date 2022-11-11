@@ -3,118 +3,155 @@ import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { ethers } from "hardhat";
 
-import { NFT__factory } from "../typechain-types/factories/contracts/NFT__factory";
-import { Store__factory } from "../typechain-types/factories/contracts/Store__factory";
+import { CollectionController__factory } from "../typechain-types/factories/contracts/CollectionController__factory";
+import { NFT__factory } from "../typechain-types/factories/contracts/token/NFT__factory";
+import { ERC20Token__factory } from "../typechain-types/factories/contracts/token/MockERC20.sol/ERC20Token__factory";
 
-import { NFT } from "../typechain-types/contracts/NFT";
-import { Store } from "../typechain-types/contracts/Store";
+import { NFT } from "../typechain-types/contracts/token/NFT";
+import { CollectionController } from "../typechain-types/contracts/CollectionController";
+import { ERC20Token } from "../typechain-types/contracts/token/MockERC20.sol/ERC20Token";
 
-describe("Store", () => {
-    const SHIPPING_FEE = BigNumber.from("1000000000000000");
-    const EACH_SHIRT_FEE = BigNumber.from("10000000000000000");
-    const ROYALTY_FEE = BigNumber.from("100");
+import { parseEther } from "ethers/lib/utils";
+
+describe("CollectionController", () => {
     const PERCENT_BASIS_POINT = BigNumber.from("10000");
+    const ADDRESS_ZERO = "0x0000000000000000000000000000000000000000";
+    const VERIFIER_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
     let owner: SignerWithAddress;
     let user1: SignerWithAddress;
-    let nFT: NFT;
-    let store: Store;
+    let user2: SignerWithAddress;
+    let feeTo: SignerWithAddress;
+    let collectionController: CollectionController;
+    let mockToken: ERC20Token;
 
     beforeEach(async () => {
         const accounts: SignerWithAddress[] = await ethers.getSigners();
         owner = accounts[0];
         user1 = accounts[1];
-
+        user2 = accounts[2];
+        feeTo = accounts[3];
+        const MockTokenFactory: ERC20Token__factory = <ERC20Token__factory>(
+            await ethers.getContractFactory("ERC20Token")
+        );
         const NFTFactory: NFT__factory = <NFT__factory>await ethers.getContractFactory("NFT");
-        const StoreFactory: Store__factory = <Store__factory>await ethers.getContractFactory("Store");
+        const ControllerFactory: CollectionController__factory = <CollectionController__factory>(
+            await ethers.getContractFactory("CollectionController")
+        );
 
-        nFT = <NFT>await NFTFactory.deploy("NFT test", "NFT", "");
-        store = <Store>await StoreFactory.deploy();
+        collectionController = <CollectionController>await ControllerFactory.deploy();
+        await collectionController.initialize(feeTo.address, VERIFIER_ADDRESS);
 
-        await store.initialize(nFT.address, SHIPPING_FEE, EACH_SHIRT_FEE, ROYALTY_FEE);
-        await nFT.setMinterStatus(store.address, true);
+        mockToken = <ERC20Token>await MockTokenFactory.deploy();
+        await mockToken.mint(owner.address, parseEther("10"));
+        await mockToken.mint(user1.address, parseEther("10"));
+
+        await mockToken.approve(collectionController.address, ethers.constants.MaxUint256);
+        await mockToken.connect(user1).approve(collectionController.address, ethers.constants.MaxUint256);
     });
 
     describe("Deployment", () => {
         it("Should deploy successfully", async () => {
-            expect(await store.shirtNFTAddress()).to.equal(nFT.address);
-            expect(await store.eachShirtFee()).to.equal(EACH_SHIRT_FEE);
-            expect(await store.shippingFee()).to.equal(SHIPPING_FEE);
-            expect(await store.percentRoyaltyFee()).to.equal(ROYALTY_FEE);
-
-            expect(await nFT.isMinter(store.address)).to.equal(true);
+            expect(await collectionController.verifier()).to.equal(VERIFIER_ADDRESS);
+            expect(await collectionController.feeTo()).to.equal(feeTo.address);
         });
     });
 
-    describe("Whitelist NFT", () => {
-        it("Should catch error Invalid length", async () => {
-            await expect(
-                store.whitelistNFT(
-                    ["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8", "0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"],
-                    ["0xeD9232a61d1880816a80EE53808C1f6051e64371"]
-                )
-            ).to.revertedWith("Invalid length");
-        });
+    describe("Create collection", () => {
+        it("Should create successfully", async () => {
+            await collectionController
+                .connect(user1)
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO);
 
-        it("Should catch error Invalid length", async () => {
-            await expect(
-                store.whitelistNFT(
-                    ["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"],
-                    ["0xeD9232a61d1880816a80EE53808C1f6051e64371", "0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"]
-                )
-            ).to.revertedWith("Invalid length");
-        });
+            const totalCollection = await collectionController.totalCollection();
+            expect(totalCollection).to.equal(1);
 
-        it("Should whitelist NFT successfully", async () => {
-            await store.whitelistNFT(
-                ["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"],
-                ["0xeD9232a61d1880816a80EE53808C1f6051e64371"]
-            );
-            const NFTStatus = await store.getNFTStatus("0xAb6088C60C0699c1C23C0BCA298136f7782D18a8");
-            expect(NFTStatus[0]).to.equal("0xeD9232a61d1880816a80EE53808C1f6051e64371");
-            expect(NFTStatus[1]).to.equal(true);
+            const collection = await collectionController.collections(1);
+            expect(collection.artist).to.equal(user1.address);
+            expect(collection.paymentToken).to.equal(ADDRESS_ZERO);
         });
     });
 
-    describe("Mint shirt", () => {
+    describe("Mint NFT - native token", () => {
+        const FEE = parseEther("0.1");
+        let SIGNATURE: string;
         beforeEach(async () => {
-            await store.whitelistNFT(
-                ["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"],
-                ["0xeD9232a61d1880816a80EE53808C1f6051e64371"]
+            SIGNATURE = await signatureData(1, user1.address, FEE, 1);
+            await collectionController
+                .connect(user1)
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO);
+        });
+
+        it("Should failed", async () => {
+            await expect(collectionController.mintNFT(1, "", FEE, SIGNATURE, { value: FEE.sub(1) })).to.revertedWith(
+                "CollectionController: wrong fee"
+            );
+            let wrongSig = await signatureData(2, user1.address, FEE, 1);
+            await expect(collectionController.mintNFT(1, "", FEE, wrongSig, { value: FEE })).to.revertedWith(
+                "CollectionController: invalid signature"
             );
         });
 
         it("Should mint successfully", async () => {
-            const cost = await store.estimateCost([["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"]], [["0"]]);
-            await store.buyShirt([["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"]], [["0"]], { value: cost });
-            expect(await nFT.totalSupply()).to.equal(1);
-            expect(await nFT.ownerOf("0")).to.equal(owner.address);
-            expect(await store.balanceOf(store.address)).to.equal(EACH_SHIRT_FEE.mul(1).add(SHIPPING_FEE));
-            expect(await store.balanceOf("0xeD9232a61d1880816a80EE53808C1f6051e64371")).to.equal(
-                EACH_SHIRT_FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT)
-            );
+            await expect(() =>
+                collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
+            ).to.changeEtherBalances([user1, feeTo], [FEE.mul(-1), FEE]);
+
+            const collection = await collectionController.collections(1);
+            const NFTFactory: NFT__factory = <NFT__factory>await ethers.getContractFactory("NFT");
+            const nFT = NFTFactory.attach(collection.collectionAddress);
+
+            expect(await nFT.ownerOf(1)).to.equal(user1.address);
         });
     });
 
-    describe("Withdraw", () => {
+    describe("Mint NFT - ERC20 token", () => {
+        const FEE = parseEther("0.1");
+        let SIGNATURE: string;
         beforeEach(async () => {
-            await store.whitelistNFT(["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"], [user1.address]);
-            const cost = await store.estimateCost([["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"]], [["0"]]);
-            await store.buyShirt([["0xAb6088C60C0699c1C23C0BCA298136f7782D18a8"]], [["0"]], { value: cost });
+            SIGNATURE = await signatureData(1, user1.address, FEE, 1);
+            await collectionController
+                .connect(user1)
+                .createCollection(1, "Var NFT Collection", "VAR", "", mockToken.address);
         });
 
-        it("Should withdraw successfully", async () => {
-            expect(await store.balanceOf(user1.address)).to.equal(
-                EACH_SHIRT_FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT)
-            );
-            await store.connect(user1).withDraw();
-            expect(await store.balanceOf(user1.address)).to.equal(0);
-        });
+        it("Should mint successfully", async () => {
+            await expect(() =>
+                collectionController.connect(user1).mintNFT(1, "hehe", FEE, SIGNATURE, { value: FEE })
+            ).to.changeTokenBalances(mockToken, [user1, feeTo], [FEE.mul(-1), FEE]);
 
-        it("Should withdraw shirt fee successfully", async () => {
-            expect(await store.balanceOf(store.address)).to.equal(EACH_SHIRT_FEE.mul(1).add(SHIPPING_FEE));
-            await store.withDrawShirtFee();
-            expect(await store.balanceOf(store.address)).to.equal(0);
+            const collection = await collectionController.collections(1);
+            const NFTFactory: NFT__factory = <NFT__factory>await ethers.getContractFactory("NFT");
+            const nFT = NFTFactory.attach(collection.collectionAddress);
+
+            expect(await nFT.ownerOf(1)).to.equal(user1.address);
+
+            let returnData = await collectionController.getNFTInfo(1, 1);
+            expect(returnData[0]).to.equal(user1.address);
+            expect(returnData[1]).to.equal("hehe");
         });
     });
 });
+
+async function signatureData(collectionId: number, sender: string, fee: BigNumber, tokenId: number) {
+    const { chainId } = await ethers.provider.getNetwork();
+    // 66 byte string, which represents 32 bytes of data
+    let messageHash = encodeData(chainId, collectionId, sender, fee, tokenId);
+
+    // 32 bytes of data in Uint8Array
+    let messageHashBinary = ethers.utils.arrayify(messageHash);
+
+    let wallet = new ethers.Wallet("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80");
+
+    // To sign the 32 bytes of data, make sure you pass in the data
+    let signature = await wallet.signMessage(messageHashBinary);
+    return signature;
+}
+
+function encodeData(chainId: number, collectionId: number, sender: string, fee: BigNumber, tokenId: number) {
+    const payload = ethers.utils.defaultAbiCoder.encode(
+        ["uint256", "uint256", "address", "uint256", "uint256"],
+        [chainId, collectionId, sender, fee, tokenId]
+    );
+    return ethers.utils.keccak256(payload);
+}
