@@ -30,6 +30,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address artist;
         address collectionAddress;
         address paymentToken;
+        uint256 mintCap;
     }
 
     // mapping index to collection
@@ -42,8 +43,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
-    event CollectionCreated(uint256 keyId, uint256 collectionId, string name, string symbol, string baseUri, address artist, address collectionAddress, address paymentToken);
-    event PaymentChanged(uint256 collectionId, address paymentToken);
+    event CollectionCreated(uint256 keyId, uint256 collectionId, string name, string symbol, string baseUri, address artist, address collectionAddress, address paymentToken, uint256 mintCap);
+    event CollectionUpdated(uint256 collectionId, address paymentToken, uint256 mintCap);
     event NFTMinted(uint256 collectionId, address collectionAddress, address receivers, string uris, uint256 tokenId);
 
     /* ========== MODIFIERS ========== */
@@ -78,16 +79,17 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         string memory name, 
         string memory symbol, 
         string memory baseUri, 
-        address paymentToken
+        address paymentToken,
+        uint256 mintCap
     ) external {
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
-        Collection memory newCollection  = Collection(keyId, _msgSender(), collectionAddress, paymentToken);
+        Collection memory newCollection  = Collection(keyId, _msgSender(), collectionAddress, paymentToken, mintCap);
         totalCollection ++;
         collections[totalCollection] = newCollection;
         artistToCollection[_msgSender()].add(totalCollection);
 
-        emit CollectionCreated(keyId, totalCollection, name, symbol, baseUri, _msgSender(), collectionAddress, paymentToken);
+        emit CollectionCreated(keyId, totalCollection, name, symbol, baseUri, _msgSender(), collectionAddress, paymentToken, mintCap);
     }
 
     /**
@@ -108,11 +110,12 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         if(collection.paymentToken == address(0)){
             require(msg.value == fee, "CollectionController: wrong fee");
             (bool sent,) = feeTo.call{value: fee}("");
-            require(sent, "Failed to withdraw");
+            require(sent, "CollectionController: Failed to send");
         } else {
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(_msgSender(), feeTo, fee);
         }
         uint256 tokenId = nft.totalSupply() + 1;
+        require (tokenId <= collection.mintCap, "CollectionController: max total supply exeeds");
         require(verifyMessage(collectionId,_msgSender(), fee, tokenId, signature), "CollectionController: invalid signature");
         nft.mint(_msgSender(), uri);
         emit NFTMinted(collectionId, collection.collectionAddress, _msgSender(), uri, tokenId);
@@ -163,6 +166,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      * @dev function to set payment token for collection
      * @param collectionId id of collection to set
      * @param _paymentToken payment token address to set
+     * @param _mintCap new mint capability to set
      * 
      * Emits {PaymentChanged} events indicating payment changed
      * 
@@ -171,16 +175,17 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      * - caller must be collection's artist
      * - one of `paymentToken` or `price` must be changed
      */
-    function setPayment(uint256 collectionId, address _paymentToken) external {
+    function updateCollectionInfo(uint256 collectionId, address _paymentToken, uint256 _mintCap) external {
         Collection memory collection = collections[collectionId];
         
         require(_msgSender() == collection.artist, "CollectionController: caller is not collection artist");
-        require(_paymentToken != collection.paymentToken, "CollectionController: payment token set");
+        require(_paymentToken != collection.paymentToken || _mintCap != collection.mintCap, "CollectionController: invalid input");
         
         collection.paymentToken = _paymentToken;
+        collection.mintCap = _mintCap;
         collections[collectionId] = collection;
 
-        emit PaymentChanged(collectionId, _paymentToken);
+        emit CollectionUpdated(collectionId, _paymentToken, _mintCap);
     }
 
     /**

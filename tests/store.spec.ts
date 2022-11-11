@@ -61,7 +61,7 @@ describe("CollectionController", () => {
         it("Should create successfully", async () => {
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO);
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000);
 
             const totalCollection = await collectionController.totalCollection();
             expect(totalCollection).to.equal(1);
@@ -79,7 +79,7 @@ describe("CollectionController", () => {
             SIGNATURE = await signatureData(1, user1.address, FEE, 1);
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO);
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000);
         });
 
         it("Should failed", async () => {
@@ -112,7 +112,7 @@ describe("CollectionController", () => {
             SIGNATURE = await signatureData(1, user1.address, FEE, 1);
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", mockToken.address);
+                .createCollection(1, "Var NFT Collection", "VAR", "", mockToken.address, 1000);
         });
 
         it("Should mint successfully", async () => {
