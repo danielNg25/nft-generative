@@ -31,6 +31,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address collectionAddress;
         address paymentToken;
         uint256 mintCap;
+        uint256 startTime;
     }
 
     // mapping index to collection
@@ -44,8 +45,9 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
     event CollectionCreated(uint256 keyId, uint256 collectionId, string name, string symbol, string baseUri, address artist, address collectionAddress, address paymentToken, uint256 mintCap);
-    event CollectionUpdated(uint256 collectionId, address paymentToken, uint256 mintCap);
-    event NFTMinted(uint256 collectionId, address collectionAddress, address receivers, string uris, uint256 tokenId);
+    event MintCapUpdated(uint256 indexed collectionId, uint256 oldMintCap, uint256 newMintCap);
+    event StartTimeUpdated(uint256 indexed collectionId, uint256 oldStartTime, uint256 newStartTime);
+    event NFTMinted(uint256 indexed collectionId, address collectionAddress, address receivers, string uris, uint256 tokenId);
 
     /* ========== MODIFIERS ========== */
 
@@ -80,11 +82,20 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         string memory symbol, 
         string memory baseUri, 
         address paymentToken,
-        uint256 mintCap
+        uint256 mintCap,
+        uint256 startTime
     ) external {
+        require(startTime > block.timestamp, "CollectionController: invalid start time");
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
-        Collection memory newCollection  = Collection(keyId, _msgSender(), collectionAddress, paymentToken, mintCap);
+        Collection memory newCollection  = Collection(
+            keyId, 
+            _msgSender(), 
+            collectionAddress, 
+            paymentToken, 
+            mintCap, 
+            startTime
+        );
         totalCollection ++;
         collections[totalCollection] = newCollection;
         artistToCollection[_msgSender()].add(totalCollection);
@@ -106,6 +117,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      */
     function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory signature) payable external nonReentrant {        
         Collection memory collection = collections[collectionId];
+        require(collection.startTime <= block.timestamp, "CollectionController: collection not started yet");
         NFT nft = NFT(collection.collectionAddress);
         if(collection.paymentToken == address(0)){
             require(msg.value == fee, "CollectionController: wrong fee");
@@ -115,7 +127,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(_msgSender(), feeTo, fee);
         }
         uint256 tokenId = nft.totalSupply() + 1;
-        require (tokenId <= collection.mintCap, "CollectionController: max total supply exeeds");
+        require(tokenId <= collection.mintCap, "CollectionController: max total supply exeeds");
         require(verifyMessage(collectionId,_msgSender(), fee, tokenId, signature), "CollectionController: invalid signature");
         nft.mint(_msgSender(), uri);
         emit NFTMinted(collectionId, collection.collectionAddress, _msgSender(), uri, tokenId);
@@ -163,29 +175,44 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     /* ========== MUTATIVE FUNCTIONS ========== */
 
     /**
-     * @dev function to set payment token for collection
+     * @dev function to set mintCap to collection
      * @param collectionId id of collection to set
-     * @param _paymentToken payment token address to set
      * @param _mintCap new mint capability to set
      * 
-     * Emits {PaymentChanged} events indicating payment changed
+     * Emits {MintCapUpdated} events indicating payment changed
      * 
-     * Requirements:
-     * 
-     * - caller must be collection's artist
-     * - one of `paymentToken` or `price` must be changed
      */
-    function updateCollectionInfo(uint256 collectionId, address _paymentToken, uint256 _mintCap) external {
+    function updateMintCap(uint256 collectionId, uint256 _mintCap) external {
         Collection memory collection = collections[collectionId];
         
         require(_msgSender() == collection.artist, "CollectionController: caller is not collection artist");
-        require(_paymentToken != collection.paymentToken || _mintCap != collection.mintCap, "CollectionController: invalid input");
+        require(_mintCap != collection.mintCap && _mintCap > NFT(collection.collectionAddress).totalSupply(), "CollectionController: invalid mint capability");
         
-        collection.paymentToken = _paymentToken;
-        collection.mintCap = _mintCap;
-        collections[collectionId] = collection;
+        emit MintCapUpdated(collectionId, collection.mintCap, _mintCap);
 
-        emit CollectionUpdated(collectionId, _paymentToken, _mintCap);
+        collection.mintCap = _mintCap;
+        collections[collectionId] = collection; 
+    }
+
+    /**
+     * @dev function to set mintCap to collection
+     * @param collectionId id of collection to set
+     * @param _startTime new startTime to set
+     * 
+     * Emits {MintCapUpdated} events indicating payment changed
+     * 
+     */
+    function updateStartTime(uint256 collectionId, uint256 _startTime) external {
+        Collection memory collection = collections[collectionId];
+        
+        require(_msgSender() == collection.artist, "CollectionController: caller is not collection artist");
+        require(collection.startTime > block.timestamp, "CollectionController: collection already started");
+        require(_startTime > block.timestamp, "CollectionController: invalid start time");
+
+        emit StartTimeUpdated(collectionId, collection.startTime, _startTime);
+
+        collection.startTime = _startTime;
+        collections[collectionId] = collection; 
     }
 
     /**

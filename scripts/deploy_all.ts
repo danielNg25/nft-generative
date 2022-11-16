@@ -19,7 +19,7 @@ async function main() {
     const admin = await accounts[0].getAddress();
 
     //Loading contracts' factory
-    const ERC20Token: ERC20Token__factory = <ERC20Token__factory>await ethers.getContractFactory("ERC20Token");
+    // const ERC20Token: ERC20Token__factory = <ERC20Token__factory>await ethers.getContractFactory("ERC20Token");
     const CollectionController: CollectionController__factory = <CollectionController__factory>(
         await ethers.getContractFactory("CollectionController")
     );
@@ -31,11 +31,11 @@ async function main() {
 
     console.log("ACCOUNT: " + admin);
 
-    const mockToken: ERC20Token = <ERC20Token>await ERC20Token.deploy();
-    await mockToken.deployed();
-    console.log("Mock Token deployed at: ", mockToken.address);
+    // const mockToken: ERC20Token = <ERC20Token>await ERC20Token.deploy();
+    // await mockToken.deployed();
+    // console.log("Mock Token deployed at: ", mockToken.address);
 
-    await mockToken.mint(admin, parseEther("10"));
+    // await mockToken.mint(admin, parseEther("10"));
 
     const controller: CollectionController = <CollectionController>(
         await upgrades.deployProxy(CollectionController, [admin, admin])
@@ -46,7 +46,7 @@ async function main() {
     console.log("Controller verify: ", controllerVerify);
 
     const contractAddress = {
-        mockToken: mockToken.address,
+        // mockToken: mockToken.address,
         controller: controller.address,
         controllerVerify: controllerVerify,
     };

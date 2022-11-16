@@ -59,9 +59,10 @@ describe("CollectionController", () => {
 
     describe("Create collection", () => {
         it("Should create successfully", async () => {
+            let timestamp = (await ethers.provider.getBlock("latest")).timestamp;
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000);
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000, timestamp + 86400);
 
             const totalCollection = await collectionController.totalCollection();
             expect(totalCollection).to.equal(1);
@@ -69,6 +70,8 @@ describe("CollectionController", () => {
             const collection = await collectionController.collections(1);
             expect(collection.artist).to.equal(user1.address);
             expect(collection.paymentToken).to.equal(ADDRESS_ZERO);
+            expect(collection.mintCap).to.equal(1000);
+            expect(collection.startTime).to.equal(timestamp + 86400);
         });
     });
 
@@ -76,13 +79,21 @@ describe("CollectionController", () => {
         const FEE = parseEther("0.1");
         let SIGNATURE: string;
         beforeEach(async () => {
+            let timestamp = (await ethers.provider.getBlock("latest")).timestamp;
             SIGNATURE = await signatureData(1, user1.address, FEE, 1);
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000);
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000, timestamp + 86400);
         });
 
         it("Should failed", async () => {
+            await expect(
+                collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
+            ).to.revertedWith("CollectionController: collection not started yet");
+
+            await ethers.provider.send("evm_increaseTime", [86400]);
+            ethers.provider.send("evm_mine", []);
+
             await expect(collectionController.mintNFT(1, "", FEE, SIGNATURE, { value: FEE.sub(1) })).to.revertedWith(
                 "CollectionController: wrong fee"
             );
@@ -93,6 +104,9 @@ describe("CollectionController", () => {
         });
 
         it("Should mint successfully", async () => {
+            await ethers.provider.send("evm_increaseTime", [86400]);
+            ethers.provider.send("evm_mine", []);
+
             await expect(() =>
                 collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
             ).to.changeEtherBalances([user1, feeTo], [FEE.mul(-1), FEE]);
@@ -109,10 +123,15 @@ describe("CollectionController", () => {
         const FEE = parseEther("0.1");
         let SIGNATURE: string;
         beforeEach(async () => {
+            let timestamp = (await ethers.provider.getBlock("latest")).timestamp;
+
             SIGNATURE = await signatureData(1, user1.address, FEE, 1);
             await collectionController
                 .connect(user1)
-                .createCollection(1, "Var NFT Collection", "VAR", "", mockToken.address, 1000);
+                .createCollection(1, "Var NFT Collection", "VAR", "", mockToken.address, 1000, timestamp + 86400);
+
+            await ethers.provider.send("evm_increaseTime", [86400]);
+            ethers.provider.send("evm_mine", []);
         });
 
         it("Should mint successfully", async () => {
@@ -129,6 +148,24 @@ describe("CollectionController", () => {
             let returnData = await collectionController.getNFTInfo(1, 1);
             expect(returnData[0]).to.equal(user1.address);
             expect(returnData[1]).to.equal("hehe");
+        });
+    });
+
+    describe("Update Collection", () => {
+        let timestamp: number;
+        beforeEach(async () => {
+            timestamp = (await ethers.provider.getBlock("latest")).timestamp;
+            await collectionController
+                .connect(user1)
+                .createCollection(1, "Var NFT Collection", "VAR", "", ADDRESS_ZERO, 1000, timestamp + 86400);
+        });
+        it("Should update successfully", async () => {
+            await collectionController.connect(user1).updateMintCap(1, 10000);
+            await collectionController.connect(user1).updateStartTime(1, timestamp + 3600);
+
+            const collection = await collectionController.collections(1);
+            expect(collection.mintCap).to.equal(10000);
+            expect(collection.startTime).to.equal(timestamp + 3600);
         });
     });
 });
