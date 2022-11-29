@@ -32,6 +32,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address paymentToken;
         uint256 mintCap;
         uint256 startTime;
+        uint256 endTime;
     }
 
     // mapping index to collection
@@ -47,6 +48,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     event CollectionCreated(uint256 keyId, uint256 collectionId, string name, string symbol, string baseUri, address artist, address collectionAddress, address paymentToken, uint256 mintCap);
     event MintCapUpdated(uint256 indexed collectionId, uint256 oldMintCap, uint256 newMintCap);
     event StartTimeUpdated(uint256 indexed collectionId, uint256 oldStartTime, uint256 newStartTime);
+    event EndTimeUpdated(uint256 indexed collectionId, uint256 oldEndTime, uint256 newEndTime);
     event NFTMinted(uint256 indexed collectionId, address collectionAddress, address receivers, string uris, uint256 tokenId);
 
     /* ========== MODIFIERS ========== */
@@ -83,9 +85,11 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         string memory baseUri, 
         address paymentToken,
         uint256 mintCap,
-        uint256 startTime
+        uint256 startTime,
+        uint256 endTime
     ) external {
         require(startTime > block.timestamp, "CollectionController: invalid start time");
+        require(endTime > startTime || endTime == 0, "CollectionController: invalid end time");
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
         Collection memory newCollection  = Collection(
@@ -94,7 +98,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
             collectionAddress, 
             paymentToken, 
             mintCap, 
-            startTime
+            startTime,
+            endTime
         );
         totalCollection ++;
         collections[totalCollection] = newCollection;
@@ -118,6 +123,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory signature) payable external nonReentrant {        
         Collection memory collection = collections[collectionId];
         require(collection.startTime <= block.timestamp, "CollectionController: collection not started yet");
+        require(collection.endTime > block.timestamp || collection.endTime == 0, "CollectionController: collection ended");
         NFT nft = NFT(collection.collectionAddress);
         if(collection.paymentToken == address(0)){
             require(msg.value == fee, "CollectionController: wrong fee");
@@ -212,6 +218,27 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         emit StartTimeUpdated(collectionId, collection.startTime, _startTime);
 
         collection.startTime = _startTime;
+        collections[collectionId] = collection; 
+    }
+
+    /**
+     * @dev function to set mintCap to collection
+     * @param collectionId id of collection to set
+     * @param _endTime new startTime to set
+     * 
+     * Emits {MintCapUpdated} events indicating payment changed
+     * 
+     */
+    function updateEndTime(uint256 collectionId, uint256 _endTime) external {
+        Collection memory collection = collections[collectionId];
+        
+        require(_msgSender() == collection.artist, "CollectionController: caller is not collection artist");
+        require(collection.startTime > block.timestamp, "CollectionController: collection already started");
+        require(_endTime > collection.startTime || _endTime == 0, "CollectionController: invalid end time");
+
+        emit EndTimeUpdated(collectionId, collection.endTime, _endTime);
+
+        collection.endTime = _endTime;
         collections[collectionId] = collection; 
     }
 
