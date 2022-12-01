@@ -88,7 +88,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         uint256 startTime,
         uint256 endTime
     ) external {
-        require(startTime > block.timestamp, "CollectionController: invalid start time");
+        require(startTime > block.timestamp || startTime == 0, "CollectionController: invalid start time");
         require(endTime > startTime || endTime == 0, "CollectionController: invalid end time");
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
@@ -122,7 +122,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      */
     function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory signature) payable external nonReentrant {        
         Collection memory collection = collections[collectionId];
-        require(collection.startTime <= block.timestamp, "CollectionController: collection not started yet");
+        require(collection.startTime <= block.timestamp || collection.startTime == 0, "CollectionController: collection not started yet");
         require(collection.endTime > block.timestamp || collection.endTime == 0, "CollectionController: collection ended");
         NFT nft = NFT(collection.collectionAddress);
         if(collection.paymentToken == address(0)){
@@ -212,8 +212,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         Collection memory collection = collections[collectionId];
         
         require(_msgSender() == collection.artist, "CollectionController: caller is not collection artist");
-        require(collection.startTime > block.timestamp, "CollectionController: collection already started");
-        require(_startTime > block.timestamp, "CollectionController: invalid start time");
+        require(collection.startTime > block.timestamp || collection.startTime == 0, "CollectionController: collection already started");
+        require(_startTime > block.timestamp || _startTime == 0, "CollectionController: invalid start time");
 
         emit StartTimeUpdated(collectionId, collection.startTime, _startTime);
 
