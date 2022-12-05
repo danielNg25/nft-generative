@@ -107,7 +107,7 @@ describe("CollectionController", () => {
         let SIGNATURE: string;
         beforeEach(async () => {
             let timestamp = (await ethers.provider.getBlock("latest")).timestamp;
-            SIGNATURE = await signatureData(1, user1.address, FEE, 1);
+            SIGNATURE = await signatureData(1, user1.address, FEE, 1, "0xabc123");
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -124,26 +124,26 @@ describe("CollectionController", () => {
 
         it("Should failed", async () => {
             await expect(
-                collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
+                collectionController.connect(user1).mintNFT(1, "", FEE, "0xabc123", SIGNATURE, { value: FEE })
             ).to.revertedWith("CollectionController: collection not started yet");
 
             await ethers.provider.send("evm_increaseTime", [86400]);
             ethers.provider.send("evm_mine", []);
 
-            await expect(collectionController.mintNFT(1, "", FEE, SIGNATURE, { value: FEE.sub(1) })).to.revertedWith(
-                "CollectionController: wrong fee"
-            );
-            let wrongSig = await signatureData(2, user1.address, FEE, 1);
-            await expect(collectionController.mintNFT(1, "", FEE, wrongSig, { value: FEE })).to.revertedWith(
-                "CollectionController: invalid signature"
-            );
+            await expect(
+                collectionController.mintNFT(1, "", FEE, "0xabc123", SIGNATURE, { value: FEE.sub(1) })
+            ).to.revertedWith("CollectionController: wrong fee");
+            let wrongSig = await signatureData(2, user1.address, FEE, 1, "0xabc123");
+            await expect(
+                collectionController.mintNFT(1, "", FEE, "0xabc123", wrongSig, { value: FEE })
+            ).to.revertedWith("CollectionController: invalid signature");
 
             await ethers.provider.send("evm_increaseTime", [86400]);
             ethers.provider.send("evm_mine", []);
 
-            await expect(collectionController.mintNFT(1, "", FEE, SIGNATURE, { value: FEE })).to.revertedWith(
-                "CollectionController: collection ended"
-            );
+            await expect(
+                collectionController.mintNFT(1, "", FEE, "0xabc123", SIGNATURE, { value: FEE })
+            ).to.revertedWith("CollectionController: collection ended");
         });
 
         it("Should mint successfully", async () => {
@@ -151,7 +151,7 @@ describe("CollectionController", () => {
             ethers.provider.send("evm_mine", []);
 
             await expect(() =>
-                collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
+                collectionController.connect(user1).mintNFT(1, "", FEE, "0xabc123", SIGNATURE, { value: FEE })
             ).to.changeEtherBalances([user1, feeTo], [FEE.mul(-1), FEE]);
 
             const collection = await collectionController.collections(1);
@@ -160,11 +160,15 @@ describe("CollectionController", () => {
 
             expect(await nFT.ownerOf(1)).to.equal(user1.address);
 
+            await expect(
+                collectionController.mintNFT(1, "", FEE, "0xabc123", SIGNATURE, { value: FEE })
+            ).to.revertedWith("CollectionController: Layer combination already minted");
             await ethers.provider.send("evm_increaseTime", [86400]);
             ethers.provider.send("evm_mine", []);
 
+            SIGNATURE = await signatureData(1, user1.address, FEE, 1, "0xabc12321");
             await expect(
-                collectionController.connect(user1).mintNFT(1, "", FEE, SIGNATURE, { value: FEE })
+                collectionController.mintNFT(1, "", FEE, "0xabc12321", SIGNATURE, { value: FEE })
             ).to.revertedWith("CollectionController: collection ended");
         });
     });
@@ -175,7 +179,7 @@ describe("CollectionController", () => {
         beforeEach(async () => {
             let timestamp = (await ethers.provider.getBlock("latest")).timestamp;
 
-            SIGNATURE = await signatureData(1, user1.address, FEE, 1);
+            SIGNATURE = await signatureData(1, user1.address, FEE, 1, "0xabc123");
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -195,7 +199,7 @@ describe("CollectionController", () => {
 
         it("Should mint successfully", async () => {
             await expect(() =>
-                collectionController.connect(user1).mintNFT(1, "hehe", FEE, SIGNATURE, { value: FEE })
+                collectionController.connect(user1).mintNFT(1, "hehe", FEE, "0xabc123", SIGNATURE, { value: FEE })
             ).to.changeTokenBalances(mockToken, [user1, feeTo], [FEE.mul(-1), FEE]);
 
             const collection = await collectionController.collections(1);
@@ -244,10 +248,10 @@ describe("CollectionController", () => {
     });
 });
 
-async function signatureData(collectionId: number, sender: string, fee: BigNumber, tokenId: number) {
+async function signatureData(collectionId: number, sender: string, fee: BigNumber, tokenId: number, layerHash: string) {
     const { chainId } = await ethers.provider.getNetwork();
     // 66 byte string, which represents 32 bytes of data
-    let messageHash = encodeData(chainId, collectionId, sender, fee, tokenId);
+    let messageHash = encodeData(chainId, collectionId, sender, fee, tokenId, layerHash);
 
     // 32 bytes of data in Uint8Array
     let messageHashBinary = ethers.utils.arrayify(messageHash);
@@ -259,10 +263,17 @@ async function signatureData(collectionId: number, sender: string, fee: BigNumbe
     return signature;
 }
 
-function encodeData(chainId: number, collectionId: number, sender: string, fee: BigNumber, tokenId: number) {
+function encodeData(
+    chainId: number,
+    collectionId: number,
+    sender: string,
+    fee: BigNumber,
+    tokenId: number,
+    layerHash: string
+) {
     const payload = ethers.utils.defaultAbiCoder.encode(
-        ["uint256", "uint256", "address", "uint256", "uint256"],
-        [chainId, collectionId, sender, fee, tokenId]
+        ["uint256", "uint256", "address", "uint256", "uint256", "bytes"],
+        [chainId, collectionId, sender, fee, tokenId, layerHash]
     );
     return ethers.utils.keccak256(payload);
 }
