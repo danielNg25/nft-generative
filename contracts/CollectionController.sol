@@ -38,6 +38,9 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     // mapping index to collection
     mapping (uint256 => Collection) public collections; 
     
+    // mapping of minted layer id hash
+    mapping (bytes => bool) private layerHashes;
+
     // mapping owner address to own collections set
     mapping (address => EnumerableSetUpgradeable.UintSet) private artistToCollection;
     
@@ -120,7 +123,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      * - length of 'receivers' and 'uris' must be the same
      * - transfer enough minting cost
      */
-    function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory signature) payable external nonReentrant {        
+    function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory layerHash, bytes memory signature) payable external nonReentrant {        
+        require(!layerHashes[layerHash], "CollectionController: Layer combination already minted");
         Collection memory collection = collections[collectionId];
         require(collection.startTime <= block.timestamp || collection.startTime == 0, "CollectionController: collection not started yet");
         require(collection.endTime > block.timestamp || collection.endTime == 0, "CollectionController: collection ended");
@@ -134,7 +138,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         }
         uint256 tokenId = nft.totalSupply() + 1;
         require(tokenId <= collection.mintCap, "CollectionController: max total supply exeeds");
-        require(verifyMessage(collectionId,_msgSender(), fee, tokenId, signature), "CollectionController: invalid signature");
+        require(verifyMessage(collectionId,_msgSender(), fee, tokenId, layerHash, signature), "CollectionController: invalid signature");
+        layerHashes[layerHash] = true;
         nft.mint(_msgSender(), uri);
         emit NFTMinted(collectionId, collection.collectionAddress, _msgSender(), uri, tokenId);
     }
@@ -178,6 +183,12 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         return NFT(collection.collectionAddress).totalSupply() + 1;
     }
 
+    /**
+     * @dev check if layer combination is minted
+     */
+    function isLayerMinted(bytes memory layerHash) public view returns(bool){
+        return layerHashes[layerHash];
+    }
     /* ========== MUTATIVE FUNCTIONS ========== */
 
     /**
@@ -271,13 +282,15 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address sender,
         uint256 fee,
         uint256 tokenId,
+        bytes memory layerHash,
         bytes memory signature
     ) public view returns (bool) {
         bytes32 dataHash = encodeData(
             collectionID,
             sender,
             fee,
-            tokenId
+            tokenId,
+            layerHash
         );
         bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
         address recovered = ECDSA.recover(signHash, signature);
@@ -288,7 +301,8 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         uint256 collectionID,
         address sender,
         uint256 fee,
-        uint256 tokenId
+        uint256 tokenId,
+        bytes memory layerHash
     ) public view returns (bytes32) {
         uint256 id;
         assembly {
@@ -296,7 +310,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         }
         return
             keccak256(
-                abi.encode(id, collectionID, sender, fee, tokenId)
+                abi.encode(id, collectionID, sender, fee, tokenId, layerHash)
             );
     }
 
