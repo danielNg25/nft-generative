@@ -123,7 +123,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
      * - length of 'receivers' and 'uris' must be the same
      * - transfer enough minting cost
      */
-    function mintNFT(uint256 collectionId, string calldata uri, uint256 fee, bytes memory layerHash, bytes memory signature) payable external nonReentrant {        
+    function mintNFT(uint256 collectionId, string memory uri, uint256 fee, bytes memory layerHash, bytes memory signature) payable external nonReentrant {        
         require(!layerHashes[layerHash], "CollectionController: Layer combination already minted");
         Collection memory collection = collections[collectionId];
         require(collection.startTime <= block.timestamp || collection.startTime == 0, "CollectionController: collection not started yet");
@@ -138,7 +138,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         }
         uint256 tokenId = nft.totalSupply() + 1;
         require(tokenId <= collection.mintCap, "CollectionController: max total supply exeeds");
-        require(verifyMessage(collectionId,_msgSender(), fee, tokenId, layerHash, signature), "CollectionController: invalid signature");
+        require(verifyMessage(collectionId,_msgSender(), fee, tokenId, uri, layerHash, signature), "CollectionController: invalid signature");
         layerHashes[layerHash] = true;
         nft.mint(_msgSender(), uri);
         emit NFTMinted(collectionId, collection.collectionAddress, _msgSender(), uri, tokenId);
@@ -147,7 +147,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
     /**
      * @dev Function to withdraw balance from this smart contract
      */
-    function withDraw(address token) external onlyOwner nonReentrant {
+    function withdraw(address token) external onlyOwner nonReentrant {
         if(token == address(0)){
             (bool sent,) = msg.sender.call{value: address(this).balance}("");
             require(sent, "Failed to withdraw");
@@ -282,6 +282,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address sender,
         uint256 fee,
         uint256 tokenId,
+        string memory uri,
         bytes memory layerHash,
         bytes memory signature
     ) public view returns (bool) {
@@ -290,6 +291,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
             sender,
             fee,
             tokenId,
+            uri,
             layerHash
         );
         bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
@@ -302,6 +304,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         address sender,
         uint256 fee,
         uint256 tokenId,
+        string memory uri,
         bytes memory layerHash
     ) public view returns (bytes32) {
         uint256 id;
@@ -310,7 +313,7 @@ contract CollectionController is Initializable, OwnableUpgradeable, ReentrancyGu
         }
         return
             keccak256(
-                abi.encode(id, collectionID, sender, fee, tokenId, layerHash)
+                abi.encode(id, collectionID, sender, fee, tokenId, uri, layerHash)
             );
     }
 
