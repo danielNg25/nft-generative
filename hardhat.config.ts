@@ -41,7 +41,7 @@ const config: HardhatUserConfig = {
         },
     },
     etherscan: {
-        apiKey: `${process.env.BSCSCAN_KEY}`,
+        apiKey: `${process.env.ETHERSCAN_KEY}`,
     },
     solidity: {
         compilers: [

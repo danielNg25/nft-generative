@@ -2,14 +2,14 @@ import * as hre from "hardhat";
 import * as contracts from "../contracts.json";
 
 async function main() {
-    // try {
-    //     await hre.run("verify:verify", {
-    //         address: contracts.mockToken,
-    //         constructorArguments: [],
-    //     });
-    // } catch (err) {
-    //     console.log("err >>", err);
-    // }
+    try {
+        await hre.run("verify:verify", {
+            address: contracts.controller,
+            constructorArguments: [],
+        });
+    } catch (err) {
+        console.log("err >>", err);
+    }
 
     try {
         await hre.run("verify:verify", {
