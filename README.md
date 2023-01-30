@@ -1,6 +1,19 @@
 # CollectionController Contract
 
-This smart contract implements a collection controller for creating and managing NFT collections. It features functionalities for creating collections, setting collection metadata, and minting NFTs for collections.
+This smart contract is a collection controller for NFTs. It features functionalities for:
+- Creating collections.
+- Setting collection config.
+- Minting NFTs for collections.
+
+In particular, Artist can create collections on this contract with various configs like: 
+- Payment token to mint NFT of the collection.
+- Mint capability.
+- Time to start and finish minting phase. 
+
+Additionally, Artist can change those configs with supported functions in the contract.
+
+User can choose to mint an NFT in a specific collection with a specific price that is set off-chain by the Payment token in collection config. The NFT detail will be passed to the mint function with a signature generated off-chain to verified if that input is satisfactory.
+
 
 ## Contract Dependencies
 
