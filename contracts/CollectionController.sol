@@ -6,6 +6,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
@@ -23,15 +24,18 @@ contract CollectionController is
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.UintSet;
+    using AddressUpgradeable for address payable;
 
     address public feeTo;
-    address public royaltyFeeTo;
 
     address public verifier;
 
     uint256 public totalCollection;
 
+    address public royaltyFeeTo;
     uint256 public royaltyFee;
+    // Price for premium pack subscription per year
+    uint256 public premiumPackPrice;
 
     uint256 public constant BASIS_POINT = 10000;
 
@@ -55,12 +59,16 @@ contract CollectionController is
     mapping(address => EnumerableSetUpgradeable.UintSet)
         private artistToCollection;
 
+    // mapping artist address to premium pack expirations time
+    mapping(address => uint256) public premiumExpirations;
+
     /* ========== EVENTS ========== */
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
+    event PremiumPackPriceChanged(uint256 oldPrice, uint256 newPrice);
 
     event CollectionCreated(
         uint256 keyId,
@@ -91,9 +99,14 @@ contract CollectionController is
     event NFTMinted(
         uint256 indexed collectionId,
         address collectionAddress,
-        address receivers,
-        string uris,
-        uint256 tokenId
+        address receiver,
+        string uri,
+        uint256 tokenId,
+        uint256 royaltyFee
+    );
+    event PremiumPackSubscribed(
+        address indexed userAddress,
+        uint256 expirationTime
     );
 
     /* ========== MODIFIERS ========== */
@@ -112,7 +125,8 @@ contract CollectionController is
         address _feeTo,
         address _verifier,
         address _royaltyFeeTo,
-        uint256 _royaltyFee
+        uint256 _royaltyFee,
+        uint256 _premiumPackPrice
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
@@ -120,6 +134,7 @@ contract CollectionController is
         verifier = _verifier;
         royaltyFeeTo = _royaltyFeeTo;
         royaltyFee = _royaltyFee;
+        premiumPackPrice = _premiumPackPrice;
     }
 
     /**
@@ -212,15 +227,27 @@ contract CollectionController is
             "CollectionController: collection ended"
         );
         NFT nft = NFT(collection.collectionAddress);
+        uint256 royaltyFeeAmount = 0;
+        if (premiumExpirations[collection.artist] >= block.timestamp) {
+            royaltyFeeAmount = (fee * royaltyFee) / 2 / BASIS_POINT;
+        } else {
+            royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
+        }
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
-            (bool sent, ) = feeTo.call{value: fee}("");
-            require(sent, "CollectionController: Failed to send");
+
+            payable(feeTo).sendValue(fee - royaltyFeeAmount);
+            payable(royaltyFeeTo).sendValue(royaltyFeeAmount);
         } else {
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
                 feeTo,
-                fee
+                fee - royaltyFeeAmount
+            );
+            IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
+                _msgSender(),
+                royaltyFeeTo,
+                royaltyFeeAmount
             );
         }
         uint256 tokenId = nft.totalSupply() + 1;
@@ -247,17 +274,38 @@ contract CollectionController is
             collection.collectionAddress,
             _msgSender(),
             uri,
-            tokenId
+            tokenId,
+            royaltyFeeAmount
         );
     }
 
     /**
+     * @dev Function to subscribe to premium package
+     */
+    function subscribePremiumPack() external payable {
+        require(
+            premiumExpirations[_msgSender()] < block.timestamp,
+            "CollectionController: Premium package not expired"
+        );
+        require(
+            msg.value == premiumPackPrice,
+            "CollectionController: Not enough price"
+        );
+
+        payable(royaltyFeeTo).sendValue(premiumPackPrice);
+        uint256 expirationTime = block.timestamp + 365 days;
+        premiumExpirations[_msgSender()] = expirationTime;
+
+        emit PremiumPackSubscribed(_msgSender(), expirationTime);
+    }
+
+    /**
      * @dev Function to withdraw balance from this smart contract
+     * @param token address of token to withdraw
      */
     function withdraw(address token) external onlyOwner nonReentrant {
         if (token == address(0)) {
-            (bool sent, ) = msg.sender.call{value: address(this).balance}("");
-            require(sent, "Failed to withdraw");
+            payable(_msgSender()).sendValue(address(this).balance);
         } else {
             IERC20Upgradeable(token).safeTransfer(
                 _msgSender(),
@@ -398,6 +446,25 @@ contract CollectionController is
 
         collection.endTime = _endTime;
         collections[collectionId] = collection;
+    }
+
+    /**
+     * @dev Function to set premiumPackPrice
+     * @param _premiumPackPrice new premium pack price to set
+     */
+    function setPremiumPackPrice(uint256 _premiumPackPrice) external {
+        uint256 oldPrice = premiumPackPrice;
+        require(
+            _premiumPackPrice > 0,
+            "CollectionController: invalid premium pack price"
+        );
+        require(
+            _premiumPackPrice != oldPrice,
+            "CollectionController: premium pack price set"
+        );
+        premiumPackPrice = _premiumPackPrice;
+
+        emit PremiumPackPriceChanged(oldPrice, _premiumPackPrice);
     }
 
     /**
