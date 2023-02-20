@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
@@ -25,8 +25,15 @@ contract CollectionController is
     using EnumerableSetUpgradeable for EnumerableSetUpgradeable.UintSet;
 
     address public feeTo;
+    address public royaltyFeeTo;
+
     address public verifier;
+
     uint256 public totalCollection;
+
+    uint256 public royaltyFee;
+
+    uint256 public constant BASIS_POINT = 10000;
 
     struct Collection {
         uint256 keyId;
@@ -52,6 +59,9 @@ contract CollectionController is
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
+    event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
+    event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
+
     event CollectionCreated(
         uint256 keyId,
         uint256 collectionId,
@@ -95,12 +105,21 @@ contract CollectionController is
      * must call right after contract is deployed
      * @param _feeTo address to receive revenue
      * @param _verifier address to verify signature
+     * @param _royaltyFeeTo address to receive royalty fee
+     * @param _royaltyFee percent of royalty fee received in basis point of 10000
      */
-    function initialize(address _feeTo, address _verifier) public initializer {
+    function initialize(
+        address _feeTo,
+        address _verifier,
+        address _royaltyFeeTo,
+        uint256 _royaltyFee
+    ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
         feeTo = _feeTo;
         verifier = _verifier;
+        royaltyFeeTo = _royaltyFeeTo;
+        royaltyFee = _royaltyFee;
     }
 
     /**
@@ -394,6 +413,39 @@ contract CollectionController is
         require(_feeTo != oldFeeTo, "CollectionController: feeTo address set");
         feeTo = _feeTo;
         emit FeeToAddressChanged(oldFeeTo, _feeTo);
+    }
+
+    /**
+     * @dev function to set royaltyFeeTo address
+     * @param _royaltyFeeTo new royaltyFeeTo address
+     */
+    function setRoyaltyFeeTo(address _royaltyFeeTo) external onlyOwner {
+        address oldFeeTo = royaltyFeeTo;
+        require(
+            _royaltyFeeTo != address(0),
+            "CollectionController: set to zero address"
+        );
+        require(
+            _royaltyFeeTo != oldFeeTo,
+            "CollectionController: royaltyFeeTo address set"
+        );
+        royaltyFeeTo = _royaltyFeeTo;
+        emit RoyaltyFeeToAddressChanged(oldFeeTo, _royaltyFeeTo);
+    }
+
+    /**
+     * @dev function to set royaltyFee address
+     * @param _royaltyFee new royaltyFee percent
+     */
+    function setRoyaltyFee(uint256 _royaltyFee) external onlyOwner {
+        uint256 oldFee = royaltyFee;
+        require(
+            royaltyFee < BASIS_POINT,
+            "CollectionController: royaltyFee too large"
+        );
+        require(_royaltyFee != oldFee, "CollectionController: royaltyFee set");
+        royaltyFee = _royaltyFee;
+        emit RoyaltyFeeChanged(oldFee, _royaltyFee);
     }
 
     /**
