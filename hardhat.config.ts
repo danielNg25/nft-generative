@@ -1,19 +1,19 @@
-import "@nomicfoundation/hardhat-chai-matchers";
-import "@nomiclabs/hardhat-truffle5";
-import "@nomiclabs/hardhat-web3";
-import "@nomiclabs/hardhat-solhint";
-import "@nomiclabs/hardhat-etherscan";
-import "@openzeppelin/hardhat-upgrades";
-import "@typechain/hardhat";
-import "@nomicfoundation/hardhat-toolbox";
+import '@nomicfoundation/hardhat-chai-matchers';
+import '@nomiclabs/hardhat-truffle5';
+import '@nomiclabs/hardhat-web3';
+import '@nomiclabs/hardhat-solhint';
+import '@nomiclabs/hardhat-etherscan';
+import '@openzeppelin/hardhat-upgrades';
+import '@typechain/hardhat';
+import '@nomicfoundation/hardhat-toolbox';
 
-import { HardhatUserConfig } from "hardhat/types";
-import "hardhat-docgen";
+import { HardhatUserConfig } from 'hardhat/types';
+import 'hardhat-docgen';
 
-require("dotenv").config();
+require('dotenv').config();
 
 const config: HardhatUserConfig = {
-    defaultNetwork: "hardhat",
+    defaultNetwork: 'hardhat',
     networks: {
         hardhat: {
             accounts: { count: 100 },
@@ -46,7 +46,7 @@ const config: HardhatUserConfig = {
     solidity: {
         compilers: [
             {
-                version: "0.8.17",
+                version: '0.8.17',
                 settings: {
                     optimizer: {
                         enabled: true,
@@ -57,26 +57,26 @@ const config: HardhatUserConfig = {
         ],
     },
     paths: {
-        sources: "./contracts",
-        tests: "./tests",
-        cache: "./cache",
-        artifacts: "./artifacts",
+        sources: './contracts',
+        tests: './tests',
+        cache: './cache',
+        artifacts: './artifacts',
     },
     mocha: {
         timeout: 200000,
-        reporter: "mocha-multi-reporters",
+        reporter: 'mocha-multi-reporters',
         reporterOptions: {
-            configFile: "./mocha-report.json",
+            configFile: './mocha-report.json',
         },
     },
     docgen: {
-        path: "./docs",
+        path: './docs',
         clear: true,
         runOnCompile: false,
     },
     typechain: {
-        outDir: "typechain-types",
-        target: "ethers-v5",
+        outDir: 'typechain-types',
+        target: 'ethers-v5',
     },
 };
 
