@@ -132,3 +132,5 @@ cache
 test-results
 typechain-types
 .openzeppelin
+
+contract.json

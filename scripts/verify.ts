@@ -1,23 +1,24 @@
-import * as hre from "hardhat";
-import * as contracts from "../contracts.json";
+import * as hre from 'hardhat';
+const network = hre.network.name;
+import * as contracts from '../contracts.json';
 
 async function main() {
     try {
-        await hre.run("verify:verify", {
-            address: contracts.controller,
+        await hre.run('verify:verify', {
+            address: contracts.controllerVerify,
             constructorArguments: [],
         });
     } catch (err) {
-        console.log("err >>", err);
+        console.log('err >>', err);
     }
 
     try {
-        await hre.run("verify:verify", {
-            address: contracts.controllerVerify,
+        await hre.run('verify:verify', {
+            address: contracts.controller,
             hre,
         });
     } catch (err) {
-        console.log("err >>", err);
+        console.log('err >>', err);
     }
 }
 

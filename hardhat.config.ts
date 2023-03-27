@@ -6,11 +6,11 @@ import '@nomiclabs/hardhat-etherscan';
 import '@openzeppelin/hardhat-upgrades';
 import '@typechain/hardhat';
 import '@nomicfoundation/hardhat-toolbox';
-
+import * as dotenv from 'dotenv';
 import { HardhatUserConfig } from 'hardhat/types';
 import 'hardhat-docgen';
 
-require('dotenv').config();
+dotenv.config();
 
 const config: HardhatUserConfig = {
     defaultNetwork: 'hardhat',
@@ -41,12 +41,26 @@ const config: HardhatUserConfig = {
         },
     },
     etherscan: {
-        apiKey: `${process.env.ETHERSCAN_KEY}`,
+        apiKey: {
+            mainnet: `${process.env.ETHERSCAN_KEY}`,
+            bscTestnet: `${process.env.BSCSCAN_KEY}`,
+            goerli: `${process.env.ETHERSCAN_KEY}`,
+            polygonMumbai: `${process.env.POLYGONSCAN_KEY}`,
+        },
     },
     solidity: {
         compilers: [
             {
                 version: '0.8.17',
+                settings: {
+                    optimizer: {
+                        enabled: true,
+                        runs: 200,
+                    },
+                },
+            },
+            {
+                version: '0.8.2',
                 settings: {
                     optimizer: {
                         enabled: true,
