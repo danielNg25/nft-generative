@@ -12,13 +12,14 @@ import { CollectionController } from '../typechain-types/contracts/CollectionCon
 import { ERC20Token } from '../typechain-types/contracts/token/MockERC20.sol/ERC20Token';
 
 import { parseEther } from 'ethers/lib/utils';
+import { AddressType } from 'typechain';
 
 describe('CollectionController', () => {
     const PERCENT_BASIS_POINT = BigNumber.from('10000');
     const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
     const VERIFIER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
     const ROYALTY_FEE = BigNumber.from(1000);
-    const PREMIUM_PACKAGE_PRICE = parseEther('0.01');
+    const PREMIUM_PACKAGE_PRICE = parseEther('0.001');
 
     let owner: SignerWithAddress;
     let user1: SignerWithAddress;
@@ -52,8 +53,7 @@ describe('CollectionController', () => {
             feeTo.address,
             VERIFIER_ADDRESS,
             royaltyFeeTo.address,
-            ROYALTY_FEE,
-            PREMIUM_PACKAGE_PRICE
+            ROYALTY_FEE
         );
 
         mockToken = <ERC20Token>await MockTokenFactory.deploy();
@@ -78,10 +78,155 @@ describe('CollectionController', () => {
         });
     });
 
+    describe('MemberPackage', () => {
+        it('Should add member package failed', async () => {
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .addMemberPackage(
+                        'Standard',
+                        parseEther('0.001'),
+                        ethers.constants.AddressZero,
+                        86400
+                    )
+            ).to.be.revertedWith('Ownable: caller is not the owner');
+
+            await expect(
+                collectionController
+                    .connect(owner)
+                    .addMemberPackage(
+                        'Standard',
+                        0,
+                        ethers.constants.AddressZero,
+                        86400
+                    )
+            ).to.be.revertedWith(
+                'CollectionController: invalid member pack price'
+            );
+
+            await expect(
+                collectionController
+                    .connect(owner)
+                    .addMemberPackage(
+                        'Standard',
+                        parseEther('0.001'),
+                        ethers.constants.AddressZero,
+                        0
+                    )
+            ).to.be.revertedWith(
+                'CollectionController: invalid member pack duration'
+            );
+        });
+
+        it('Should add member package successfully', async () => {
+            await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
+
+            const memberPackage = await collectionController.getMemberPackage(
+                0
+            );
+            expect(memberPackage.package.name).to.equal('Standard');
+            expect(memberPackage.package.price).to.equal(parseEther('0.001'));
+            expect(memberPackage.package.paymentToken).to.equal(
+                ethers.constants.AddressZero
+            );
+            expect(memberPackage.package.duration).to.equal(86400);
+            expect(memberPackage.isActive).to.equal(true);
+
+            await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Pro',
+                    parseEther('0.002'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
+
+            const memberPackages =
+                await collectionController.getActiveMemberPackage();
+            expect(memberPackages.length).to.equal(2);
+            expect(memberPackages[1].name).to.equal('Pro');
+            expect(memberPackages[1].price).to.equal(parseEther('0.002'));
+            expect(memberPackages[1].paymentToken).to.equal(
+                ethers.constants.AddressZero
+            );
+            expect(memberPackages[1].duration).to.equal(86400);
+        });
+
+        it('Should update member package successfully', async () => {
+            await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
+
+            await collectionController
+                .connect(owner)
+                .updateMemberPackage(
+                    0,
+                    'Pro',
+                    parseEther('0.002'),
+                    ethers.constants.AddressZero,
+                    864000
+                );
+
+            const memberPackage = await collectionController.getMemberPackage(
+                0
+            );
+            expect(memberPackage.package.name).to.equal('Pro');
+            expect(memberPackage.package.price).to.equal(parseEther('0.002'));
+            expect(memberPackage.package.paymentToken).to.equal(
+                ethers.constants.AddressZero
+            );
+            expect(memberPackage.package.duration).to.equal(864000);
+        });
+
+        it('Should remove member package successfully', async () => {
+            await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
+
+            await collectionController.connect(owner).deleteMemberPackage(0);
+
+            const memberPackages =
+                await collectionController.getActiveMemberPackage();
+            expect(memberPackages.length).to.equal(0);
+            const memberPackage = await collectionController.getMemberPackage(
+                0
+            );
+            expect(memberPackage.isActive).to.equal(false);
+        });
+    });
+
     describe('Create collection', () => {
         it('Should create successfully', async () => {
             let timestamp = (await ethers.provider.getBlock('latest'))
                 .timestamp;
+            let signatureCollection = signatureCollectionData(
+                1,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp + 86400,
+                timestamp + 86400 * 2,
+                timestamp + 86400
+            );
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -92,7 +237,9 @@ describe('CollectionController', () => {
                     ADDRESS_ZERO,
                     1000,
                     timestamp + 86400,
-                    timestamp + 86400 * 2
+                    timestamp + 86400 * 2,
+                    timestamp + 86400,
+                    signatureCollection
                 );
 
             const totalCollection =
@@ -110,6 +257,17 @@ describe('CollectionController', () => {
         it('Should create successfully - endTime = 0', async () => {
             let timestamp = (await ethers.provider.getBlock('latest'))
                 .timestamp;
+            let signatureCollection = signatureCollectionData(
+                1,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp + 86400,
+                0,
+                timestamp + 86400
+            );
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -120,7 +278,9 @@ describe('CollectionController', () => {
                     ADDRESS_ZERO,
                     1000,
                     timestamp + 86400,
-                    0
+                    0,
+                    timestamp + 86400,
+                    signatureCollection
                 );
 
             const totalCollection =
@@ -150,6 +310,17 @@ describe('CollectionController', () => {
                 '',
                 '0xabc123'
             );
+            let signatureCollection = signatureCollectionData(
+                1,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp + 86400,
+                timestamp + 86400 * 2,
+                timestamp + 86400
+            );
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -160,7 +331,9 @@ describe('CollectionController', () => {
                     ADDRESS_ZERO,
                     1000,
                     timestamp + 86400,
-                    timestamp + 86400 * 2
+                    timestamp + 86400 * 2,
+                    timestamp + 86400,
+                    signatureCollection
                 );
         });
 
@@ -280,10 +453,17 @@ describe('CollectionController', () => {
         it('Should mint successfully - premium pack subscribed', async () => {
             await ethers.provider.send('evm_increaseTime', [86400]);
             ethers.provider.send('evm_mine', []);
-
+            await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
             await collectionController
                 .connect(user1)
-                .subscribePremiumPack({ value: PREMIUM_PACKAGE_PRICE });
+                .subscribeMemberPack(0, { value: PREMIUM_PACKAGE_PRICE });
 
             await expect(() =>
                 collectionController
@@ -359,6 +539,17 @@ describe('CollectionController', () => {
                 'hehe',
                 '0xabc123'
             );
+            let signatureCollection = signatureCollectionData(
+                1,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                mockToken.address,
+                1000,
+                timestamp + 86400,
+                timestamp + 86400 * 2,
+                timestamp + 86400
+            );
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -369,7 +560,9 @@ describe('CollectionController', () => {
                     mockToken.address,
                     1000,
                     timestamp + 86400,
-                    timestamp + 86400 * 2
+                    timestamp + 86400 * 2,
+                    timestamp + 86400,
+                    signatureCollection
                 );
 
             await ethers.provider.send('evm_increaseTime', [86400]);
@@ -380,9 +573,7 @@ describe('CollectionController', () => {
             await expect(() =>
                 collectionController
                     .connect(user1)
-                    .mintNFT(1, 'hehe', FEE, '0xabc123', SIGNATURE, {
-                        value: FEE,
-                    })
+                    .mintNFT(1, 'hehe', FEE, '0xabc123', SIGNATURE)
             ).to.changeTokenBalances(
                 mockToken,
                 [user1, feeTo, royaltyFeeTo],
@@ -410,15 +601,21 @@ describe('CollectionController', () => {
 
         it('Should mint successfully - premium package subscribed', async () => {
             await collectionController
+                .connect(owner)
+                .addMemberPackage(
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    86400
+                );
+            await collectionController
                 .connect(user1)
-                .subscribePremiumPack({ value: PREMIUM_PACKAGE_PRICE });
+                .subscribeMemberPack(0, { value: PREMIUM_PACKAGE_PRICE });
 
             await expect(() =>
                 collectionController
                     .connect(user1)
-                    .mintNFT(1, 'hehe', FEE, '0xabc123', SIGNATURE, {
-                        value: FEE,
-                    })
+                    .mintNFT(1, 'hehe', FEE, '0xabc123', SIGNATURE)
             ).to.changeTokenBalances(
                 mockToken,
                 [user1, feeTo, royaltyFeeTo],
@@ -449,6 +646,17 @@ describe('CollectionController', () => {
         let timestamp: number;
         beforeEach(async () => {
             timestamp = (await ethers.provider.getBlock('latest')).timestamp;
+            let signatureCollection = signatureCollectionData(
+                1,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp + 86400,
+                timestamp + 86400 * 2,
+                timestamp + 86400
+            );
             await collectionController
                 .connect(user1)
                 .createCollection(
@@ -459,7 +667,9 @@ describe('CollectionController', () => {
                     ADDRESS_ZERO,
                     1000,
                     timestamp + 86400,
-                    timestamp + 86400 * 2
+                    timestamp + 86400 * 2,
+                    timestamp + 86400,
+                    signatureCollection
                 );
         });
         it('Should update successfully', async () => {
@@ -535,6 +745,85 @@ function encodeData(
             'bytes',
         ],
         [chainId, collectionId, sender, fee, tokenId, uri, layerHash]
+    );
+    return ethers.utils.keccak256(payload);
+}
+
+async function signatureCollectionData(
+    keyId: number,
+    name: string,
+    symbol: string,
+    baseUri: string,
+    paymentToken: string,
+    mintCap: number,
+    startTime: number,
+    endTime: number,
+    signatureExpTime: number
+) {
+    const { chainId } = await ethers.provider.getNetwork();
+    // 66 byte string, which represents 32 bytes of data
+    let messageHash = encodeCollectionData(
+        chainId,
+        keyId,
+        name,
+        symbol,
+        baseUri,
+        paymentToken,
+        mintCap,
+        startTime,
+        endTime,
+        signatureExpTime
+    );
+
+    // 32 bytes of data in Uint8Array
+    let messageHashBinary = ethers.utils.arrayify(messageHash);
+
+    let wallet = new ethers.Wallet(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+    );
+
+    // To sign the 32 bytes of data, make sure you pass in the data
+    let signature = await wallet.signMessage(messageHashBinary);
+    return signature;
+}
+
+function encodeCollectionData(
+    chainId: number,
+    keyId: number,
+    name: string,
+    symbol: string,
+    baseUri: string,
+    paymentToken: string,
+    mintCap: number,
+    startTime: number,
+    endTime: number,
+    signatureExpTime: number
+) {
+    const payload = ethers.utils.defaultAbiCoder.encode(
+        [
+            'uint256',
+            'uint256',
+            'string',
+            'string',
+            'string',
+            'address',
+            'uint256',
+            'uint256',
+            'uint256',
+            'uint256',
+        ],
+        [
+            chainId,
+            keyId,
+            name,
+            symbol,
+            baseUri,
+            paymentToken,
+            mintCap,
+            startTime,
+            endTime,
+            signatureExpTime,
+        ]
     );
     return ethers.utils.keccak256(payload);
 }
