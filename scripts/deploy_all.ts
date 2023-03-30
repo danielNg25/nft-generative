@@ -40,13 +40,26 @@ async function main() {
             admin,
             admin,
             1000,
-            parseEther('0.01'),
         ])
     );
     await controller.deployed();
     console.log('Controller deployed at: ', controller.address);
     const controllerVerify = await upgrades.erc1967.getImplementationAddress(
         controller.address
+    );
+
+    await controller.addMemberPackage(
+        'Standard',
+        parseEther('0.001'),
+        ethers.constants.AddressZero,
+        2592000
+    );
+    await delay(5000);
+    await controller.addMemberPackage(
+        'Pro',
+        parseEther('0.002'),
+        ethers.constants.AddressZero,
+        2592000
     );
     console.log('Controller verify: ', controllerVerify);
 
@@ -66,3 +79,6 @@ main()
         console.error(error);
         process.exit(1);
     });
+function delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}

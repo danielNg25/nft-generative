@@ -31,11 +31,10 @@ contract CollectionController is
     address public verifier;
 
     uint256 public totalCollection;
+    uint256 private totalMemberPackage;
 
     address public royaltyFeeTo;
     uint256 public royaltyFee;
-    // Price for premium pack subscription per year
-    uint256 public premiumPackPrice;
 
     uint256 public constant BASIS_POINT = 10000;
 
@@ -49,8 +48,27 @@ contract CollectionController is
         uint256 endTime;
     }
 
+    struct MemberPackage {
+        uint256 packageId;
+        string name;
+        uint256 price;
+        address paymentToken;
+        uint256 duration;
+    }
+
+    struct MemberPackageSubscription {
+        uint256 packageId;
+        uint256 expirationTime;
+    }
+
     // mapping index to collection
     mapping(uint256 => Collection) public collections;
+
+    // mapping index to member package
+    mapping(uint256 => MemberPackage) private memberPackages;
+
+    // set of active member package
+    EnumerableSetUpgradeable.UintSet private activeMemberPackage;
 
     // mapping of minted layer id hash
     mapping(bytes => bool) private layerHashes;
@@ -59,8 +77,9 @@ contract CollectionController is
     mapping(address => EnumerableSetUpgradeable.UintSet)
         private artistToCollection;
 
-    // mapping artist address to premium pack expirations time
-    mapping(address => uint256) public premiumExpirations;
+    // mapping artist address to member pack expirations time
+    mapping(address => MemberPackageSubscription)
+        public memberPackageSubscriptions;
 
     /* ========== EVENTS ========== */
 
@@ -68,7 +87,6 @@ contract CollectionController is
     event VerifierAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
-    event PremiumPackPriceChanged(uint256 oldPrice, uint256 newPrice);
 
     event CollectionCreated(
         uint256 keyId,
@@ -104,8 +122,28 @@ contract CollectionController is
         uint256 tokenId,
         uint256 royaltyFee
     );
-    event PremiumPackSubscribed(
+
+    event MemberPackageCreated(
+        uint256 packageId,
+        string name,
+        uint256 price,
+        address paymentToken,
+        uint256 duration
+    );
+
+    event MemberPackageUpdated(
+        uint256 packageId,
+        string name,
+        uint256 price,
+        address paymentToken,
+        uint256 duration
+    );
+
+    event MemberPackageDeleted(uint256 packageId);
+
+    event MemberPackSubscribed(
         address indexed userAddress,
+        uint256 packageId,
         uint256 expirationTime
     );
 
@@ -125,8 +163,7 @@ contract CollectionController is
         address _feeTo,
         address _verifier,
         address _royaltyFeeTo,
-        uint256 _royaltyFee,
-        uint256 _premiumPackPrice
+        uint256 _royaltyFee
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
@@ -134,7 +171,6 @@ contract CollectionController is
         verifier = _verifier;
         royaltyFeeTo = _royaltyFeeTo;
         royaltyFee = _royaltyFee;
-        premiumPackPrice = _premiumPackPrice;
     }
 
     /**
@@ -155,8 +191,30 @@ contract CollectionController is
         address paymentToken,
         uint256 mintCap,
         uint256 startTime,
-        uint256 endTime
+        uint256 endTime,
+        uint256 signatureExpTime,
+        bytes memory signature
     ) external {
+        require(
+            verifyCollectionCreationMessage(
+                keyId,
+                name,
+                symbol,
+                baseUri,
+                paymentToken,
+                mintCap,
+                startTime,
+                endTime,
+                signatureExpTime,
+                signature
+            ),
+            "CollectionController: invalid signature"
+        );
+
+        require(
+            signatureExpTime > block.timestamp,
+            "CollectionController: signature expired"
+        );
         require(
             startTime > block.timestamp || startTime == 0,
             "CollectionController: invalid start time"
@@ -228,7 +286,10 @@ contract CollectionController is
         );
         NFT nft = NFT(collection.collectionAddress);
         uint256 royaltyFeeAmount = 0;
-        if (premiumExpirations[collection.artist] >= block.timestamp) {
+        if (
+            memberPackageSubscriptions[collection.artist].expirationTime >=
+            block.timestamp
+        ) {
             royaltyFeeAmount = (fee * royaltyFee) / 2 / BASIS_POINT;
         } else {
             royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
@@ -280,23 +341,44 @@ contract CollectionController is
     }
 
     /**
-     * @dev Function to subscribe to premium package
+     * @dev Function to subscribe to member package
      */
-    function subscribePremiumPack() external payable {
+    function subscribeMemberPack(uint256 _packageId) external payable {
         require(
-            premiumExpirations[_msgSender()] < block.timestamp,
-            "CollectionController: Premium package not expired"
-        );
-        require(
-            msg.value == premiumPackPrice,
-            "CollectionController: Not enough price"
+            memberPackageSubscriptions[_msgSender()].expirationTime <
+                block.timestamp,
+            "CollectionController: Member package not expired"
         );
 
-        payable(royaltyFeeTo).sendValue(premiumPackPrice);
-        uint256 expirationTime = block.timestamp + 365 days;
-        premiumExpirations[_msgSender()] = expirationTime;
+        require(
+            activeMemberPackage.contains(_packageId),
+            "CollectionController: Invalid package ID"
+        );
 
-        emit PremiumPackSubscribed(_msgSender(), expirationTime);
+        MemberPackage memory memberPackage = memberPackages[_packageId];
+
+        if (memberPackage.paymentToken == address(0)) {
+            require(
+                msg.value == memberPackage.price,
+                "CollectionController: Not enough price"
+            );
+
+            payable(royaltyFeeTo).sendValue(memberPackage.price);
+        } else {
+            IERC20Upgradeable(memberPackage.paymentToken).safeTransferFrom(
+                _msgSender(),
+                royaltyFeeTo,
+                memberPackage.price
+            );
+        }
+
+        uint256 expirationTime = block.timestamp + memberPackage.duration;
+        memberPackageSubscriptions[_msgSender()] = MemberPackageSubscription(
+            _packageId,
+            expirationTime
+        );
+
+        emit MemberPackSubscribed(_msgSender(), _packageId, expirationTime);
     }
 
     /**
@@ -354,6 +436,55 @@ contract CollectionController is
      */
     function isLayerMinted(bytes memory layerHash) public view returns (bool) {
         return layerHashes[layerHash];
+    }
+
+    /**
+     * @dev get active member package
+     */
+    function getActiveMemberPackageId() public view returns (uint256[] memory) {
+        return activeMemberPackage.values();
+    }
+
+    /**
+     * @dev get active member package
+     */
+    function getActiveMemberPackage()
+        public
+        view
+        returns (MemberPackage[] memory)
+    {
+        uint256[] memory activePackageId = activeMemberPackage.values();
+        MemberPackage[] memory packages = new MemberPackage[](
+            activePackageId.length
+        );
+        for (uint256 i = 0; i < activePackageId.length; i++) {
+            packages[i] = memberPackages[activePackageId[i]];
+        }
+        return packages;
+    }
+
+    /**
+     * @dev get member package by id
+     */
+    function getMemberPackage(
+        uint256 packageId
+    ) public view returns (MemberPackage memory package, bool isActive) {
+        if (activeMemberPackage.contains(packageId)) {
+            isActive = true;
+        } else {
+            isActive = false;
+        }
+
+        package = memberPackages[packageId];
+    }
+
+    /**
+     * @dev get member package subscription
+     */
+    function getMemberPackageSubscription(
+        address user
+    ) public view returns (MemberPackageSubscription memory) {
+        return memberPackageSubscriptions[user];
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
@@ -449,22 +580,100 @@ contract CollectionController is
     }
 
     /**
-     * @dev Function to set premiumPackPrice
-     * @param _premiumPackPrice new premium pack price to set
+     * @dev Function to add new memberPackPrice
+     * @param _name new member pack name
+     * @param _price new member pack price
+     * @param _paymentToken new member pack payment token
+     * @param _duration new member pack duration
      */
-    function setPremiumPackPrice(uint256 _premiumPackPrice) external {
-        uint256 oldPrice = premiumPackPrice;
+    function addMemberPackage(
+        string memory _name,
+        uint256 _price,
+        address _paymentToken,
+        uint256 _duration
+    ) external onlyOwner {
+        require(_price > 0, "CollectionController: invalid member pack price");
         require(
-            _premiumPackPrice > 0,
-            "CollectionController: invalid premium pack price"
+            _duration > 0,
+            "CollectionController: invalid member pack duration"
         );
-        require(
-            _premiumPackPrice != oldPrice,
-            "CollectionController: premium pack price set"
-        );
-        premiumPackPrice = _premiumPackPrice;
 
-        emit PremiumPackPriceChanged(oldPrice, _premiumPackPrice);
+        uint256 memberPackageId = totalMemberPackage;
+        memberPackages[memberPackageId] = MemberPackage(
+            memberPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _duration
+        );
+
+        activeMemberPackage.add(memberPackageId);
+
+        emit MemberPackageCreated(
+            memberPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _duration
+        );
+        totalMemberPackage++;
+    }
+
+    /**
+     * @dev Function to update memberPackPrice
+     * @param _memberPackageId member pack id to update
+     * @param _name new member pack name
+     * @param _price new member pack price
+     * @param _paymentToken new member pack payment token
+     * @param _duration new member pack duration
+     */
+    function updateMemberPackage(
+        uint256 _memberPackageId,
+        string memory _name,
+        uint256 _price,
+        address _paymentToken,
+        uint256 _duration
+    ) external onlyOwner {
+        require(
+            _memberPackageId < totalMemberPackage &&
+                activeMemberPackage.contains(_memberPackageId),
+            "CollectionController: invalid member pack id"
+        );
+        require(_price > 0, "CollectionController: invalid member pack price");
+        require(
+            _duration > 0,
+            "CollectionController: invalid member pack duration"
+        );
+
+        MemberPackage storage memberPackage = memberPackages[_memberPackageId];
+        memberPackage.name = _name;
+        memberPackage.price = _price;
+        memberPackage.paymentToken = _paymentToken;
+        memberPackage.duration = _duration;
+
+        emit MemberPackageUpdated(
+            _memberPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _duration
+        );
+    }
+
+    /**
+     * @dev Function to delete memberPackage
+     * @param _memberPackageId member pack id to delete
+     */
+    function deleteMemberPackage(uint256 _memberPackageId) external onlyOwner {
+        require(
+            _memberPackageId < totalMemberPackage &&
+                activeMemberPackage.contains(_memberPackageId),
+            "CollectionController: invalid member pack id"
+        );
+
+        activeMemberPackage.remove(_memberPackageId);
+
+        emit MemberPackageDeleted(_memberPackageId);
     }
 
     /**
@@ -533,6 +742,8 @@ contract CollectionController is
         emit FeeToAddressChanged(oldVerifier, _verifier);
     }
 
+    /* ========== SIGNATURE FUNCTIONS ========== */
+
     function verifyMessage(
         uint256 collectionID,
         address sender,
@@ -541,7 +752,7 @@ contract CollectionController is
         string memory uri,
         bytes memory layerHash,
         bytes memory signature
-    ) public view returns (bool) {
+    ) private view returns (bool) {
         bytes32 dataHash = encodeData(
             collectionID,
             sender,
@@ -562,7 +773,7 @@ contract CollectionController is
         uint256 tokenId,
         string memory uri,
         bytes memory layerHash
-    ) public view returns (bytes32) {
+    ) private view returns (bytes32) {
         uint256 id;
         assembly {
             id := chainid()
@@ -577,6 +788,66 @@ contract CollectionController is
                     tokenId,
                     uri,
                     layerHash
+                )
+            );
+    }
+
+    function verifyCollectionCreationMessage(
+        uint256 keyId,
+        string memory name,
+        string memory symbol,
+        string memory baseUri,
+        address paymentToken,
+        uint256 mintCap,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 signatureExpTime,
+        bytes memory signature
+    ) private view returns (bool) {
+        bytes32 dataHash = encodeCollectionCreationData(
+            keyId,
+            name,
+            symbol,
+            baseUri,
+            paymentToken,
+            mintCap,
+            startTime,
+            endTime,
+            signatureExpTime
+        );
+        bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
+        address recovered = ECDSA.recover(signHash, signature);
+        return recovered == verifier;
+    }
+
+    function encodeCollectionCreationData(
+        uint256 keyId,
+        string memory name,
+        string memory symbol,
+        string memory baseUri,
+        address paymentToken,
+        uint256 mintCap,
+        uint256 startTime,
+        uint256 endTime,
+        uint256 signatureExpTime
+    ) private view returns (bytes32) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+        return
+            keccak256(
+                abi.encode(
+                    id,
+                    keyId,
+                    name,
+                    symbol,
+                    baseUri,
+                    paymentToken,
+                    mintCap,
+                    startTime,
+                    endTime,
+                    signatureExpTime
                 )
             );
     }

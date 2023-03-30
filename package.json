@@ -1,7 +1,7 @@
 {
-    "name": "VAR-poc-sm",
+    "name": "mintii-smart-contract",
     "version": "1.0.0",
-    "description": "Var POC Smart Contract",
+    "description": "Smart contract for Mintii",
     "main": "index.js",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",

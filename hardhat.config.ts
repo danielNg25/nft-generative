@@ -36,7 +36,7 @@ const config: HardhatUserConfig = {
             accounts: [`${process.env.PRIVATE_KEY}`],
         },
         bsctestnet: {
-            url: `https://data-seed-prebsc-1-s1.binance.org:8545/`,
+            url: `https://data-seed-prebsc-2-s1.binance.org:8545`,
             accounts: [`${process.env.PRIVATE_KEY}`],
         },
     },
@@ -56,7 +56,11 @@ const config: HardhatUserConfig = {
                     optimizer: {
                         enabled: true,
                         runs: 200,
+                        details: {
+                            yul: true,
+                        },
                     },
+                    viaIR: true,
                 },
             },
             {
