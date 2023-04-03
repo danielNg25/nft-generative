@@ -3,16 +3,15 @@ import { expect } from 'chai';
 import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
 
-import { CollectionController__factory } from '../typechain-types/factories/contracts/CollectionController__factory';
-import { NFT__factory } from '../typechain-types/factories/contracts/token/NFT__factory';
-import { ERC20Token__factory } from '../typechain-types/factories/contracts/token/MockERC20.sol/ERC20Token__factory';
-
-import { NFT } from '../typechain-types/contracts/token/NFT';
-import { CollectionController } from '../typechain-types/contracts/CollectionController';
-import { ERC20Token } from '../typechain-types/contracts/token/MockERC20.sol/ERC20Token';
+import {
+    CollectionController__factory,
+    NFT__factory,
+    ERC20Token__factory,
+    CollectionController,
+    ERC20Token,
+} from '../typechain-types';
 
 import { parseEther } from 'ethers/lib/utils';
-import { AddressType } from 'typechain';
 
 describe('CollectionController', () => {
     const PERCENT_BASIS_POINT = BigNumber.from('10000');
@@ -75,140 +74,6 @@ describe('CollectionController', () => {
                 VERIFIER_ADDRESS
             );
             expect(await collectionController.feeTo()).to.equal(feeTo.address);
-        });
-    });
-
-    describe('MemberPackage', () => {
-        it('Should add member package failed', async () => {
-            await expect(
-                collectionController
-                    .connect(user1)
-                    .addMemberPackage(
-                        'Standard',
-                        parseEther('0.001'),
-                        ethers.constants.AddressZero,
-                        86400
-                    )
-            ).to.be.revertedWith('Ownable: caller is not the owner');
-
-            await expect(
-                collectionController
-                    .connect(owner)
-                    .addMemberPackage(
-                        'Standard',
-                        0,
-                        ethers.constants.AddressZero,
-                        86400
-                    )
-            ).to.be.revertedWith(
-                'CollectionController: invalid member pack price'
-            );
-
-            await expect(
-                collectionController
-                    .connect(owner)
-                    .addMemberPackage(
-                        'Standard',
-                        parseEther('0.001'),
-                        ethers.constants.AddressZero,
-                        0
-                    )
-            ).to.be.revertedWith(
-                'CollectionController: invalid member pack duration'
-            );
-        });
-
-        it('Should add member package successfully', async () => {
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Standard',
-                    parseEther('0.001'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-
-            const memberPackage = await collectionController.getMemberPackage(
-                0
-            );
-            expect(memberPackage.package.name).to.equal('Standard');
-            expect(memberPackage.package.price).to.equal(parseEther('0.001'));
-            expect(memberPackage.package.paymentToken).to.equal(
-                ethers.constants.AddressZero
-            );
-            expect(memberPackage.package.duration).to.equal(86400);
-            expect(memberPackage.isActive).to.equal(true);
-
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Pro',
-                    parseEther('0.002'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-
-            const memberPackages =
-                await collectionController.getActiveMemberPackage();
-            expect(memberPackages.length).to.equal(2);
-            expect(memberPackages[1].name).to.equal('Pro');
-            expect(memberPackages[1].price).to.equal(parseEther('0.002'));
-            expect(memberPackages[1].paymentToken).to.equal(
-                ethers.constants.AddressZero
-            );
-            expect(memberPackages[1].duration).to.equal(86400);
-        });
-
-        it('Should update member package successfully', async () => {
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Standard',
-                    parseEther('0.001'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-
-            await collectionController
-                .connect(owner)
-                .updateMemberPackage(
-                    0,
-                    'Pro',
-                    parseEther('0.002'),
-                    ethers.constants.AddressZero,
-                    864000
-                );
-
-            const memberPackage = await collectionController.getMemberPackage(
-                0
-            );
-            expect(memberPackage.package.name).to.equal('Pro');
-            expect(memberPackage.package.price).to.equal(parseEther('0.002'));
-            expect(memberPackage.package.paymentToken).to.equal(
-                ethers.constants.AddressZero
-            );
-            expect(memberPackage.package.duration).to.equal(864000);
-        });
-
-        it('Should remove member package successfully', async () => {
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Standard',
-                    parseEther('0.001'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-
-            await collectionController.connect(owner).deleteMemberPackage(0);
-
-            const memberPackages =
-                await collectionController.getActiveMemberPackage();
-            expect(memberPackages.length).to.equal(0);
-            const memberPackage = await collectionController.getMemberPackage(
-                0
-            );
-            expect(memberPackage.isActive).to.equal(false);
         });
     });
 
@@ -449,79 +314,6 @@ describe('CollectionController', () => {
                 )
             ).to.revertedWith('CollectionController: collection ended');
         });
-
-        it('Should mint successfully - premium pack subscribed', async () => {
-            await ethers.provider.send('evm_increaseTime', [86400]);
-            ethers.provider.send('evm_mine', []);
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Standard',
-                    parseEther('0.001'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-            await collectionController
-                .connect(user1)
-                .subscribeMemberPack(0, { value: PREMIUM_PACKAGE_PRICE });
-
-            await expect(() =>
-                collectionController
-                    .connect(user1)
-                    .mintNFT(1, '', FEE, '0xabc123', SIGNATURE, { value: FEE })
-            ).to.changeEtherBalances(
-                [user1, feeTo, royaltyFeeTo],
-                [
-                    FEE.mul(-1),
-                    FEE.mul(PERCENT_BASIS_POINT.sub(ROYALTY_FEE.div(2))).div(
-                        PERCENT_BASIS_POINT
-                    ),
-                    FEE.mul(ROYALTY_FEE.div(2)).div(PERCENT_BASIS_POINT),
-                ]
-            );
-
-            const collection = await collectionController.collections(1);
-            const NFTFactory: NFT__factory = <NFT__factory>(
-                await ethers.getContractFactory('NFT')
-            );
-            const nFT = NFTFactory.attach(collection.collectionAddress);
-
-            expect(await nFT.ownerOf(1)).to.equal(user1.address);
-
-            await expect(
-                collectionController.mintNFT(
-                    1,
-                    '',
-                    FEE,
-                    '0xabc123',
-                    SIGNATURE,
-                    { value: FEE }
-                )
-            ).to.revertedWith(
-                'CollectionController: Layer combination already minted'
-            );
-            await ethers.provider.send('evm_increaseTime', [86400]);
-            ethers.provider.send('evm_mine', []);
-
-            SIGNATURE = await signatureData(
-                1,
-                user1.address,
-                FEE,
-                1,
-                '',
-                '0xabc12321'
-            );
-            await expect(
-                collectionController.mintNFT(
-                    1,
-                    '',
-                    FEE,
-                    '0xabc12321',
-                    SIGNATURE,
-                    { value: FEE }
-                )
-            ).to.revertedWith('CollectionController: collection ended');
-        });
     });
 
     describe('Mint NFT - ERC20 token', () => {
@@ -583,48 +375,6 @@ describe('CollectionController', () => {
                         PERCENT_BASIS_POINT
                     ),
                     FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT),
-                ]
-            );
-
-            const collection = await collectionController.collections(1);
-            const NFTFactory: NFT__factory = <NFT__factory>(
-                await ethers.getContractFactory('NFT')
-            );
-            const nFT = NFTFactory.attach(collection.collectionAddress);
-
-            expect(await nFT.ownerOf(1)).to.equal(user1.address);
-
-            let returnData = await collectionController.getNFTInfo(1, 1);
-            expect(returnData[0]).to.equal(user1.address);
-            expect(returnData[1]).to.equal('hehe');
-        });
-
-        it('Should mint successfully - premium package subscribed', async () => {
-            await collectionController
-                .connect(owner)
-                .addMemberPackage(
-                    'Standard',
-                    parseEther('0.001'),
-                    ethers.constants.AddressZero,
-                    86400
-                );
-            await collectionController
-                .connect(user1)
-                .subscribeMemberPack(0, { value: PREMIUM_PACKAGE_PRICE });
-
-            await expect(() =>
-                collectionController
-                    .connect(user1)
-                    .mintNFT(1, 'hehe', FEE, '0xabc123', SIGNATURE)
-            ).to.changeTokenBalances(
-                mockToken,
-                [user1, feeTo, royaltyFeeTo],
-                [
-                    FEE.mul(-1),
-                    FEE.mul(PERCENT_BASIS_POINT.sub(ROYALTY_FEE.div(2))).div(
-                        PERCENT_BASIS_POINT
-                    ),
-                    FEE.mul(ROYALTY_FEE.div(2)).div(PERCENT_BASIS_POINT),
                 ]
             );
 

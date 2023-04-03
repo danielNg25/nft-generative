@@ -332,14 +332,22 @@ contract MemberPackageRegistry is
         uint256 totalPackage,
         mapping(address => mapping(uint256 => uint256))
             storage memberPackageExpirationTime
-    ) internal view returns (MemberPackageSubscription[] memory packages) {
+    ) internal view returns (MemberPackageSubscription[] memory) {
+        uint256 length;
         for (uint256 i = 0; i < totalPackage; i++) {
             if (memberPackageExpirationTime[user][i] > block.timestamp) {
-                packages[i] = MemberPackageSubscription(
-                    i,
-                    memberPackageExpirationTime[user][i]
-                );
+                length++;
             }
+        }
+
+        MemberPackageSubscription[]
+            memory packages = new MemberPackageSubscription[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            packages[i] = MemberPackageSubscription(
+                i,
+                memberPackageExpirationTime[user][i]
+            );
         }
         return packages;
     }
@@ -595,6 +603,11 @@ contract MemberPackageRegistry is
      */
     function subscribeCreatorPack(uint256 _packageId) external payable {
         require(
+            _packageId < totalCreatorPackage,
+            "PackageRegistry: Invalid creator package id"
+        );
+
+        require(
             activeCreatorPackage.contains(_packageId),
             "PackageRegistry: Package deactived"
         );
@@ -613,6 +626,11 @@ contract MemberPackageRegistry is
      * @param _packageId ID of user package
      */
     function subscribeUserPack(uint256 _packageId) external payable {
+        require(
+            _packageId < totalUserPackage,
+            "PackageRegistry: Invalid user package id"
+        );
+
         require(
             activeUserPackage.contains(_packageId),
             "PackageRegistry: Package deactived"
@@ -677,7 +695,7 @@ contract MemberPackageRegistry is
         require(_price > 0, "PackageRegistry: invalid package price");
         require(
             _startTime < _endTime && _endTime > block.timestamp,
-            "PackageRegistry: invalid user pack time"
+            "PackageRegistry: invalid package time"
         );
         require(_duration > 0, "PackageRegistry: invalid package duration");
 
@@ -750,5 +768,6 @@ contract MemberPackageRegistry is
         _memberPackageExpirationTime[_msgSender()][
             _memberPackageId
         ] = expirationTime;
+        _memberPackages[_memberPackageId].packageSold++;
     }
 }
