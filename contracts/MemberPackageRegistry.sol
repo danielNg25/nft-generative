@@ -23,7 +23,7 @@ contract MemberPackageRegistry is
     address public royaltyFeeTo;
 
     // Creator package
-    struct CreatorPackage {
+    struct MemberPackage {
         uint256 keyId;
         uint256 packageId;
         string name;
@@ -36,13 +36,13 @@ contract MemberPackageRegistry is
         uint256 duration;
     }
 
-    struct CreatorPackageSubscription {
+    struct MemberPackageSubscription {
         uint256 packageId;
         uint256 expirationTime;
     }
 
     // mapping index to creator package
-    mapping(uint256 => CreatorPackage) private creatorPackages;
+    mapping(uint256 => MemberPackage) private creatorPackages;
 
     // mapping keyId to creator packageId
     mapping(uint256 => uint256) private keyIdToCreatorPackage;
@@ -54,26 +54,8 @@ contract MemberPackageRegistry is
     mapping(address => mapping(uint256 => uint256))
         public creatorPackageExpirationTime;
 
-    // User package
-    struct UserPackage {
-        uint256 keyId;
-        uint256 packageId;
-        string name;
-        uint256 price;
-        address paymentToken;
-        uint256 maxPackageSold;
-        uint256 packageSold;
-        uint256 startTime;
-        uint256 endTime;
-        uint256 duration;
-    }
-
-    struct UserPackageSubscription {
-        uint256 packageId;
-        uint256 expirationTime;
-    }
     // mapping index to user package
-    mapping(uint256 => UserPackage) private userPackages;
+    mapping(uint256 => MemberPackage) private userPackages;
 
     // mapping keyId to user packageId
     mapping(uint256 => uint256) private keyIdToUserPackage;
@@ -113,7 +95,7 @@ contract MemberPackageRegistry is
         uint256 duration
     );
 
-    event CreatorPackageDeleted(uint256 packageId);
+    event CreatorPackageDeactived(uint256 packageId);
 
     event CreatorPackSubscribed(
         address indexed userAddress,
@@ -146,7 +128,7 @@ contract MemberPackageRegistry is
         uint256 duration
     );
 
-    event UserPackageDeleted(uint256 packageId);
+    event UserPackageDeactived(uint256 packageId);
 
     event UserPackSubscribed(
         address indexed userAddress,
@@ -173,11 +155,11 @@ contract MemberPackageRegistry is
         address oldFeeTo = royaltyFeeTo;
         require(
             _royaltyFeeTo != address(0),
-            "CollectionController: set to zero address"
+            "PackageRegistry: set to zero address"
         );
         require(
             _royaltyFeeTo != oldFeeTo,
-            "CollectionController: royaltyFeeTo address set"
+            "PackageRegistry: royaltyFeeTo address set"
         );
         royaltyFeeTo = _royaltyFeeTo;
         emit RoyaltyFeeToAddressChanged(oldFeeTo, _royaltyFeeTo);
@@ -203,16 +185,11 @@ contract MemberPackageRegistry is
     function getActiveCreatorPackage()
         public
         view
-        returns (CreatorPackage[] memory)
+        returns (MemberPackage[] memory)
     {
         uint256[] memory activePackageId = activeCreatorPackage.values();
-        CreatorPackage[] memory packages = new CreatorPackage[](
-            activePackageId.length
-        );
-        for (uint256 i = 0; i < activePackageId.length; i++) {
-            packages[i] = creatorPackages[activePackageId[i]];
-        }
-        return packages;
+
+        return _getActiveMemberPackage(activePackageId, creatorPackages);
     }
 
     /**
@@ -221,14 +198,12 @@ contract MemberPackageRegistry is
      */
     function getCreatorPackage(
         uint256 packageId
-    ) public view returns (CreatorPackage memory package, bool isActive) {
-        if (activeCreatorPackage.contains(packageId)) {
-            isActive = true;
-        } else {
-            isActive = false;
-        }
-
-        package = creatorPackages[packageId];
+    ) public view returns (MemberPackage memory package, bool isActive) {
+        (package, isActive) = _getMemberPackageInfo(
+            packageId,
+            creatorPackages,
+            activeCreatorPackage
+        );
     }
 
     /**
@@ -237,15 +212,12 @@ contract MemberPackageRegistry is
      */
     function getCreatorPackageByKeyId(
         uint256 keyId
-    ) public view returns (CreatorPackage memory package, bool isActive) {
-        uint256 packageId = keyIdToCreatorPackage[keyId];
-        if (activeCreatorPackage.contains(packageId)) {
-            isActive = true;
-        } else {
-            isActive = false;
-        }
-
-        package = creatorPackages[packageId];
+    ) public view returns (MemberPackage memory package, bool isActive) {
+        (package, isActive) = _getMemberPackageInfo(
+            keyIdToCreatorPackage[keyId],
+            creatorPackages,
+            activeCreatorPackage
+        );
     }
 
     /**
@@ -254,16 +226,13 @@ contract MemberPackageRegistry is
      */
     function getCreatorPackageSubscription(
         address user
-    ) public view returns (CreatorPackageSubscription[] memory packages) {
-        for (uint256 i = 0; i < totalCreatorPackage; i++) {
-            if (creatorPackageExpirationTime[user][i] > block.timestamp) {
-                packages[i] = CreatorPackageSubscription(
-                    i,
-                    creatorPackageExpirationTime[user][i]
-                );
-            }
-        }
-        return packages;
+    ) public view returns (MemberPackageSubscription[] memory) {
+        return
+            _getMemberPackageSubscription(
+                user,
+                totalCreatorPackage,
+                creatorPackageExpirationTime
+            );
     }
 
     // User Package View functions
@@ -277,15 +246,14 @@ contract MemberPackageRegistry is
     /**
      * @dev get active user package
      */
-    function getActiveUserPackage() public view returns (UserPackage[] memory) {
+    function getActiveUserPackage()
+        public
+        view
+        returns (MemberPackage[] memory)
+    {
         uint256[] memory activePackageId = activeUserPackage.values();
-        UserPackage[] memory packages = new UserPackage[](
-            activePackageId.length
-        );
-        for (uint256 i = 0; i < activePackageId.length; i++) {
-            packages[i] = userPackages[activePackageId[i]];
-        }
-        return packages;
+
+        return _getActiveMemberPackage(activePackageId, userPackages);
     }
 
     /**
@@ -294,14 +262,12 @@ contract MemberPackageRegistry is
      */
     function getUserPackage(
         uint256 packageId
-    ) public view returns (UserPackage memory package, bool isActive) {
-        if (activeUserPackage.contains(packageId)) {
-            isActive = true;
-        } else {
-            isActive = false;
-        }
-
-        package = userPackages[packageId];
+    ) public view returns (MemberPackage memory package, bool isActive) {
+        (package, isActive) = _getMemberPackageInfo(
+            packageId,
+            userPackages,
+            activeUserPackage
+        );
     }
 
     /**
@@ -310,15 +276,12 @@ contract MemberPackageRegistry is
      */
     function getUserPackageByKeyId(
         uint256 keyId
-    ) public view returns (UserPackage memory package, bool isActive) {
-        uint256 packageId = keyIdToUserPackage[keyId];
-        if (activeUserPackage.contains(packageId)) {
-            isActive = true;
-        } else {
-            isActive = false;
-        }
-
-        package = userPackages[packageId];
+    ) public view returns (MemberPackage memory package, bool isActive) {
+        (package, isActive) = _getMemberPackageInfo(
+            keyIdToUserPackage[keyId],
+            userPackages,
+            activeUserPackage
+        );
     }
 
     /**
@@ -327,12 +290,54 @@ contract MemberPackageRegistry is
      */
     function getUserPackageSubscription(
         address user
-    ) public view returns (UserPackageSubscription[] memory packages) {
-        for (uint256 i = 0; i < totalUserPackage; i++) {
-            if (userPackageExpirationTime[user][i] > block.timestamp) {
-                packages[i] = UserPackageSubscription(
+    ) public view returns (MemberPackageSubscription[] memory) {
+        return
+            _getMemberPackageSubscription(
+                user,
+                totalUserPackage,
+                userPackageExpirationTime
+            );
+    }
+
+    // Internal view functions
+    function _getActiveMemberPackage(
+        uint256[] memory activePackageIds,
+        mapping(uint256 => MemberPackage) storage memberPackages
+    ) internal view returns (MemberPackage[] memory) {
+        MemberPackage[] memory packages = new MemberPackage[](
+            activePackageIds.length
+        );
+        for (uint256 i = 0; i < activePackageIds.length; i++) {
+            packages[i] = memberPackages[activePackageIds[i]];
+        }
+        return packages;
+    }
+
+    function _getMemberPackageInfo(
+        uint256 packageId,
+        mapping(uint256 => MemberPackage) storage memberPackages,
+        EnumerableSetUpgradeable.UintSet storage activePackages
+    ) internal view returns (MemberPackage memory package, bool isActive) {
+        if (activePackages.contains(packageId)) {
+            isActive = true;
+        } else {
+            isActive = false;
+        }
+
+        package = memberPackages[packageId];
+    }
+
+    function _getMemberPackageSubscription(
+        address user,
+        uint256 totalPackage,
+        mapping(address => mapping(uint256 => uint256))
+            storage memberPackageExpirationTime
+    ) internal view returns (MemberPackageSubscription[] memory packages) {
+        for (uint256 i = 0; i < totalPackage; i++) {
+            if (memberPackageExpirationTime[user][i] > block.timestamp) {
+                packages[i] = MemberPackageSubscription(
                     i,
-                    userPackageExpirationTime[user][i]
+                    memberPackageExpirationTime[user][i]
                 );
             }
         }
@@ -341,6 +346,7 @@ contract MemberPackageRegistry is
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
+    // Creator package functions
     /**
      * @dev Function to add new creator package
      * @param _keyId key to map with offchain data
@@ -362,25 +368,15 @@ contract MemberPackageRegistry is
         uint256 _endTime,
         uint256 _duration
     ) external onlyOwner {
-        require(_price > 0, "CollectionController: invalid creator pack price");
-        require(
-            _startTime < _endTime && _endTime > block.timestamp,
-            "CollectionController: invalid creator pack time"
-        );
-        require(
-            _duration > 0,
-            "CollectionController: invalid creator pack duration"
-        );
-
         uint256 creatorPackageId = totalCreatorPackage;
-        creatorPackages[creatorPackageId] = CreatorPackage(
-            _keyId,
+        _addMemberPackage(
+            creatorPackages,
             creatorPackageId,
+            _keyId,
             _name,
             _price,
             _paymentToken,
             _maxPackageSell,
-            0,
             _startTime,
             _endTime,
             _duration
@@ -425,39 +421,24 @@ contract MemberPackageRegistry is
     ) external onlyOwner {
         require(
             _creatorPackageId < totalCreatorPackage,
-            "CollectionController: invalid creator pack id"
-        );
-        require(_price > 0, "CollectionController: invalid creator pack price");
-        require(
-            _startTime < _endTime && _endTime > block.timestamp,
-            "CollectionController: invalid creator pack time"
-        );
-        require(
-            _duration > 0,
-            "CollectionController: invalid creator pack duration"
+            "PackageRegistry: invalid creator pack id"
         );
 
-        CreatorPackage storage creatorPackage = creatorPackages[
-            _creatorPackageId
-        ];
-        require(
-            _maxPackageSell > creatorPackage.packageSold,
-            "CollectionController: invalid max package sell"
+        uint256 keyId = _updateMemberPackage(
+            creatorPackages,
+            activeCreatorPackage,
+            _creatorPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _maxPackageSell,
+            _startTime,
+            _endTime,
+            _duration
         );
-        creatorPackage.name = _name;
-        creatorPackage.price = _price;
-        creatorPackage.paymentToken = _paymentToken;
-        creatorPackage.maxPackageSold = _maxPackageSell;
-        creatorPackage.startTime = _startTime;
-        creatorPackage.endTime = _endTime;
-        creatorPackage.duration = _duration;
-
-        if (!activeCreatorPackage.contains(_creatorPackageId)) {
-            activeCreatorPackage.add(_creatorPackageId);
-        }
 
         emit CreatorPackageUpdated(
-            creatorPackage.keyId,
+            keyId,
             _creatorPackageId,
             _name,
             _price,
@@ -470,23 +451,24 @@ contract MemberPackageRegistry is
     }
 
     /**
-     * @dev Function to delete creator package
-     * @param _creatorPackageId creator pack id to delete
+     * @dev Function to deactive creator package
+     * @param _creatorPackageId creator pack id to deactive
      */
-    function deleteCreatorPackage(
+    function deactiveCreatorPackage(
         uint256 _creatorPackageId
     ) external onlyOwner {
         require(
             _creatorPackageId < totalCreatorPackage &&
                 activeCreatorPackage.contains(_creatorPackageId),
-            "CollectionController: invalid creator pack id"
+            "PackageRegistry: invalid creator pack id"
         );
 
         activeCreatorPackage.remove(_creatorPackageId);
 
-        emit CreatorPackageDeleted(_creatorPackageId);
+        emit CreatorPackageDeactived(_creatorPackageId);
     }
 
+    // User package functions
     /**
      * @dev Function to add new user package
      * @param _keyId key mapping for offchain data
@@ -508,25 +490,15 @@ contract MemberPackageRegistry is
         uint256 _endTime,
         uint256 _duration
     ) external onlyOwner {
-        require(_price > 0, "CollectionController: invalid user pack price");
-        require(
-            _startTime < _endTime && _endTime > block.timestamp,
-            "CollectionController: invalid user pack time"
-        );
-        require(
-            _duration > 0,
-            "CollectionController: invalid user pack duration"
-        );
-
         uint256 userPackageId = totalUserPackage;
-        userPackages[userPackageId] = UserPackage(
-            _keyId,
+        _addMemberPackage(
+            userPackages,
             userPackageId,
+            _keyId,
             _name,
             _price,
             _paymentToken,
             _maxPackageSell,
-            0,
             _startTime,
             _endTime,
             _duration
@@ -571,37 +543,23 @@ contract MemberPackageRegistry is
     ) external onlyOwner {
         require(
             _userPackageId < totalUserPackage,
-            "CollectionController: invalid user pack id"
+            "PackageRegistry: invalid user pack id"
         );
-        require(_price > 0, "CollectionController: invalid user pack price");
-        require(
-            _startTime < _endTime && _endTime > block.timestamp,
-            "CollectionController: invalid user pack time"
+        uint256 keyId = _updateMemberPackage(
+            userPackages,
+            activeUserPackage,
+            _userPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _maxPackageSell,
+            _startTime,
+            _endTime,
+            _duration
         );
-        require(
-            _duration > 0,
-            "CollectionController: invalid user pack duration"
-        );
-
-        UserPackage storage userPackage = userPackages[_userPackageId];
-        require(
-            _maxPackageSell > userPackage.packageSold,
-            "CollectionController: invalid max package sell"
-        );
-        userPackage.name = _name;
-        userPackage.price = _price;
-        userPackage.paymentToken = _paymentToken;
-        userPackage.maxPackageSold = _maxPackageSell;
-        userPackage.startTime = _startTime;
-        userPackage.endTime = _endTime;
-        userPackage.duration = _duration;
-
-        if (!activeUserPackage.contains(_userPackageId)) {
-            activeUserPackage.add(_userPackageId);
-        }
 
         emit UserPackageUpdated(
-            userPackage.keyId,
+            keyId,
             _userPackageId,
             _name,
             _price,
@@ -614,19 +572,19 @@ contract MemberPackageRegistry is
     }
 
     /**
-     * @dev Function to delete user package
-     * @param _userPackageId user pack id to delete
+     * @dev Function to deactive user package
+     * @param _userPackageId user pack id to deactive
      */
-    function deleteUserPackage(uint256 _userPackageId) external onlyOwner {
+    function deactiveUserPackage(uint256 _userPackageId) external onlyOwner {
         require(
             _userPackageId < totalUserPackage &&
                 activeUserPackage.contains(_userPackageId),
-            "CollectionController: invalid user pack id"
+            "PackageRegistry: invalid user pack id"
         );
 
         activeUserPackage.remove(_userPackageId);
 
-        emit UserPackageDeleted(_userPackageId);
+        emit UserPackageDeactived(_userPackageId);
     }
 
     // User functions
@@ -638,52 +596,15 @@ contract MemberPackageRegistry is
     function subscribeCreatorPack(uint256 _packageId) external payable {
         require(
             activeCreatorPackage.contains(_packageId),
-            "CollectionController: Package deleted"
+            "PackageRegistry: Package deactived"
         );
 
-        CreatorPackage memory creatorPackage = creatorPackages[_packageId];
-
-        require(
-            creatorPackage.startTime <= block.timestamp,
-            "CollectionController: Package not started"
-        );
-
-        require(
-            creatorPackage.endTime >= block.timestamp,
-            "CollectionController: Package ended"
-        );
-
-        require(
-            creatorPackage.maxPackageSold == 0 ||
-                creatorPackage.maxPackageSold > creatorPackage.packageSold,
-            "CollectionController: Package sold out"
-        );
-
-        if (creatorPackage.paymentToken == address(0)) {
-            require(
-                msg.value == creatorPackage.price,
-                "CollectionController: Not enough price"
-            );
-
-            payable(royaltyFeeTo).sendValue(creatorPackage.price);
-        } else {
-            IERC20Upgradeable(creatorPackage.paymentToken).safeTransferFrom(
-                _msgSender(),
-                royaltyFeeTo,
-                creatorPackage.price
-            );
-        }
-
-        uint256 oldExpirationTime = creatorPackageExpirationTime[_msgSender()][
+        uint256 expirationTime = _subscribeMemberPackage(
+            creatorPackageExpirationTime,
+            creatorPackages,
             _packageId
-        ];
-        uint256 expirationTime;
-        if (oldExpirationTime > block.timestamp) {
-            expirationTime = oldExpirationTime + creatorPackage.duration;
-        } else {
-            expirationTime = block.timestamp + creatorPackage.duration;
-        }
-        creatorPackageExpirationTime[_msgSender()][_packageId] = expirationTime;
+        );
+
         emit CreatorPackSubscribed(_msgSender(), _packageId, expirationTime);
     }
 
@@ -694,52 +615,140 @@ contract MemberPackageRegistry is
     function subscribeUserPack(uint256 _packageId) external payable {
         require(
             activeUserPackage.contains(_packageId),
-            "CollectionController: Package deleted"
+            "PackageRegistry: Package deactived"
         );
 
-        UserPackage memory userPackage = userPackages[_packageId];
+        uint256 expirationTime = _subscribeMemberPackage(
+            userPackageExpirationTime,
+            userPackages,
+            _packageId
+        );
+
+        emit UserPackSubscribed(_msgSender(), _packageId, expirationTime);
+    }
+
+    /* ========== INTERNAL FUNCTIONS ========== */
+
+    function _addMemberPackage(
+        mapping(uint256 => MemberPackage) storage _memberPackages,
+        uint256 _memberPackageId,
+        uint256 _keyId,
+        string memory _name,
+        uint256 _price,
+        address _paymentToken,
+        uint256 _maxPackageSell,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _duration
+    ) internal {
+        require(_price > 0, "PackageRegistry: invalid package price");
+        require(
+            _startTime < _endTime && _endTime > block.timestamp,
+            "PackageRegistry: invalid package time"
+        );
+        require(_duration > 0, "PackageRegistry: invalid package duration");
+
+        _memberPackages[_memberPackageId] = MemberPackage(
+            _keyId,
+            _memberPackageId,
+            _name,
+            _price,
+            _paymentToken,
+            _maxPackageSell,
+            0,
+            _startTime,
+            _endTime,
+            _duration
+        );
+    }
+
+    function _updateMemberPackage(
+        mapping(uint256 => MemberPackage) storage _memberPackages,
+        EnumerableSetUpgradeable.UintSet storage _activeMemberSet,
+        uint256 _memberPackageId,
+        string memory _name,
+        uint256 _price,
+        address _paymentToken,
+        uint256 _maxPackageSell,
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _duration
+    ) internal returns (uint256) {
+        require(_price > 0, "PackageRegistry: invalid package price");
+        require(
+            _startTime < _endTime && _endTime > block.timestamp,
+            "PackageRegistry: invalid user pack time"
+        );
+        require(_duration > 0, "PackageRegistry: invalid package duration");
+
+        MemberPackage storage memberPackage = _memberPackages[_memberPackageId];
+        require(
+            _maxPackageSell > memberPackage.packageSold,
+            "PackageRegistry: invalid max package sell"
+        );
+        memberPackage.name = _name;
+        memberPackage.price = _price;
+        memberPackage.paymentToken = _paymentToken;
+        memberPackage.maxPackageSold = _maxPackageSell;
+        memberPackage.startTime = _startTime;
+        memberPackage.endTime = _endTime;
+        memberPackage.duration = _duration;
+
+        if (!_activeMemberSet.contains(_memberPackageId)) {
+            _activeMemberSet.add(_memberPackageId);
+        }
+        return memberPackage.keyId;
+    }
+
+    function _subscribeMemberPackage(
+        mapping(address => mapping(uint256 => uint256))
+            storage _memberPackageExpirationTime,
+        mapping(uint256 => MemberPackage) storage _memberPackages,
+        uint256 _memberPackageId
+    ) internal returns (uint256 expirationTime) {
+        MemberPackage memory memberPackage = _memberPackages[_memberPackageId];
+        require(
+            memberPackage.startTime <= block.timestamp,
+            "PackageRegistry: Package not started"
+        );
 
         require(
-            userPackage.startTime <= block.timestamp,
-            "CollectionController: Package not started"
+            memberPackage.endTime >= block.timestamp,
+            "PackageRegistry: Package ended"
         );
 
         require(
-            userPackage.endTime >= block.timestamp,
-            "CollectionController: Package ended"
+            memberPackage.maxPackageSold == 0 ||
+                memberPackage.maxPackageSold > memberPackage.packageSold,
+            "PackageRegistry: Package sold out"
         );
 
-        require(
-            userPackage.maxPackageSold == 0 ||
-                userPackage.maxPackageSold > userPackage.packageSold,
-            "CollectionController: Package sold out"
-        );
-
-        if (userPackage.paymentToken == address(0)) {
+        if (memberPackage.paymentToken == address(0)) {
             require(
-                msg.value == userPackage.price,
-                "CollectionController: Not enough price"
+                msg.value == memberPackage.price,
+                "PackageRegistry: Not enough price"
             );
 
-            payable(royaltyFeeTo).sendValue(userPackage.price);
+            payable(royaltyFeeTo).sendValue(memberPackage.price);
         } else {
-            IERC20Upgradeable(userPackage.paymentToken).safeTransferFrom(
+            IERC20Upgradeable(memberPackage.paymentToken).safeTransferFrom(
                 _msgSender(),
                 royaltyFeeTo,
-                userPackage.price
+                memberPackage.price
             );
         }
 
-        uint256 oldExpirationTime = userPackageExpirationTime[_msgSender()][
-            _packageId
+        uint256 oldExpirationTime = _memberPackageExpirationTime[_msgSender()][
+            _memberPackageId
         ];
-        uint256 expirationTime;
+
         if (oldExpirationTime > block.timestamp) {
-            expirationTime = oldExpirationTime + userPackage.duration;
+            expirationTime = oldExpirationTime + memberPackage.duration;
         } else {
-            expirationTime = block.timestamp + userPackage.duration;
+            expirationTime = block.timestamp + memberPackage.duration;
         }
-        userPackageExpirationTime[_msgSender()][_packageId] = expirationTime;
-        emit UserPackSubscribed(_msgSender(), _packageId, expirationTime);
+        _memberPackageExpirationTime[_msgSender()][
+            _memberPackageId
+        ] = expirationTime;
     }
 }

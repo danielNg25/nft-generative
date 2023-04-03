@@ -177,7 +177,8 @@ contract CollectionController is
         );
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
-        Collection memory newCollection = Collection(
+        totalCollection++;
+        collections[totalCollection] = Collection(
             keyId,
             _msgSender(),
             collectionAddress,
@@ -186,8 +187,6 @@ contract CollectionController is
             startTime,
             endTime
         );
-        totalCollection++;
-        collections[totalCollection] = newCollection;
         artistToCollection[_msgSender()].add(totalCollection);
 
         emit CollectionCreated(
