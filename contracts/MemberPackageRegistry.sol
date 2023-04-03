@@ -601,7 +601,7 @@ contract MemberPackageRegistry is
      * @dev Function to subscribe to creator package
      * @param _packageId ID of creator package
      */
-    function subscribeCreatorPack(uint256 _packageId) external payable {
+    function subscribeCreatorPackage(uint256 _packageId) external payable {
         require(
             _packageId < totalCreatorPackage,
             "PackageRegistry: Invalid creator package id"
@@ -625,7 +625,7 @@ contract MemberPackageRegistry is
      * @dev Function to subscribe to user package
      * @param _packageId ID of user package
      */
-    function subscribeUserPack(uint256 _packageId) external payable {
+    function subscribeUserPackage(uint256 _packageId) external payable {
         require(
             _packageId < totalUserPackage,
             "PackageRegistry: Invalid user package id"
