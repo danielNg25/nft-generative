@@ -3,15 +3,12 @@ import * as fs from 'fs';
 import { Signer } from 'ethers';
 const ethers = hre.ethers;
 const upgrades = hre.upgrades;
-import { CollectionController__factory } from '../typechain-types/factories/contracts/CollectionController__factory';
-import { NFT__factory } from '../typechain-types/factories/contracts/token/NFT__factory';
-import { ERC20Token__factory } from '../typechain-types/factories/contracts/token/MockERC20.sol/ERC20Token__factory';
-
-import { NFT } from '../typechain-types/contracts/token/NFT';
-import { CollectionController } from '../typechain-types/contracts/CollectionController';
-import { ERC20Token } from '../typechain-types/contracts/token/MockERC20.sol/ERC20Token';
-
-import { parseEther } from 'ethers/lib/utils';
+import {
+    CollectionController__factory,
+    MemberPackageRegistry__factory,
+    CollectionController,
+    MemberPackageRegistry,
+} from '../typechain-types';
 
 async function main() {
     //Loading accounts
@@ -22,6 +19,10 @@ async function main() {
     const CollectionController: CollectionController__factory = <
         CollectionController__factory
     >await ethers.getContractFactory('CollectionController');
+
+    const MemberPackageRegistry: MemberPackageRegistry__factory = <
+        MemberPackageRegistry__factory
+    >await ethers.getContractFactory('MemberPackageRegistry');
 
     // Deploy contracts
     console.log(
@@ -44,28 +45,31 @@ async function main() {
     );
     await controller.deployed();
     console.log('Controller deployed at: ', controller.address);
+    const memberPackageRegistry: MemberPackageRegistry = <
+        MemberPackageRegistry
+    >await upgrades.deployProxy(MemberPackageRegistry, [admin]);
+    await memberPackageRegistry.deployed();
+    console.log(
+        'MemberPackageRegistry deployed at: ',
+        memberPackageRegistry.address
+    );
     const controllerVerify = await upgrades.erc1967.getImplementationAddress(
         controller.address
     );
 
-    await controller.addMemberPackage(
-        'Standard',
-        parseEther('0.001'),
-        ethers.constants.AddressZero,
-        2592000
-    );
-    await delay(5000);
-    await controller.addMemberPackage(
-        'Pro',
-        parseEther('0.002'),
-        ethers.constants.AddressZero,
-        2592000
-    );
     console.log('Controller verify: ', controllerVerify);
+    const packageRegistryVerify =
+        await upgrades.erc1967.getImplementationAddress(
+            memberPackageRegistry.address
+        );
+
+    console.log('PackageRegistry verify: ', packageRegistryVerify);
 
     const contractAddress = {
         controller: controller.address,
         controllerVerify: controllerVerify,
+        memberPackageRegistry: memberPackageRegistry.address,
+        packageRegistryVerify: packageRegistryVerify,
     };
 
     fs.writeFileSync('contracts.json', JSON.stringify(contractAddress));

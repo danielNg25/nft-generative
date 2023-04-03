@@ -20,6 +20,24 @@ async function main() {
     } catch (err) {
         console.log('err >>', err);
     }
+
+    try {
+        await hre.run('verify:verify', {
+            address: contracts.memberPackageRegistry,
+            constructorArguments: [],
+        });
+    } catch (err) {
+        console.log('err >>', err);
+    }
+
+    try {
+        await hre.run('verify:verify', {
+            address: contracts.memberPackageRegistry,
+            hre,
+        });
+    } catch (err) {
+        console.log('err >>', err);
+    }
 }
 
 main()
