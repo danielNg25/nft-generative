@@ -31,7 +31,6 @@ contract CollectionController is
     address public verifier;
 
     uint256 public totalCollection;
-    uint256 private totalMemberPackage;
 
     address public royaltyFeeTo;
     uint256 public royaltyFee;
@@ -48,27 +47,8 @@ contract CollectionController is
         uint256 endTime;
     }
 
-    struct MemberPackage {
-        uint256 packageId;
-        string name;
-        uint256 price;
-        address paymentToken;
-        uint256 duration;
-    }
-
-    struct MemberPackageSubscription {
-        uint256 packageId;
-        uint256 expirationTime;
-    }
-
     // mapping index to collection
     mapping(uint256 => Collection) public collections;
-
-    // mapping index to member package
-    mapping(uint256 => MemberPackage) private memberPackages;
-
-    // set of active member package
-    EnumerableSetUpgradeable.UintSet private activeMemberPackage;
 
     // mapping of minted layer id hash
     mapping(bytes => bool) private layerHashes;
@@ -76,10 +56,6 @@ contract CollectionController is
     // mapping owner address to own collections set
     mapping(address => EnumerableSetUpgradeable.UintSet)
         private artistToCollection;
-
-    // mapping artist address to member pack expirations time
-    mapping(address => MemberPackageSubscription)
-        public memberPackageSubscriptions;
 
     /* ========== EVENTS ========== */
 
@@ -121,30 +97,6 @@ contract CollectionController is
         string uri,
         uint256 tokenId,
         uint256 royaltyFee
-    );
-
-    event MemberPackageCreated(
-        uint256 packageId,
-        string name,
-        uint256 price,
-        address paymentToken,
-        uint256 duration
-    );
-
-    event MemberPackageUpdated(
-        uint256 packageId,
-        string name,
-        uint256 price,
-        address paymentToken,
-        uint256 duration
-    );
-
-    event MemberPackageDeleted(uint256 packageId);
-
-    event MemberPackSubscribed(
-        address indexed userAddress,
-        uint256 packageId,
-        uint256 expirationTime
     );
 
     /* ========== MODIFIERS ========== */
@@ -286,14 +238,7 @@ contract CollectionController is
         );
         NFT nft = NFT(collection.collectionAddress);
         uint256 royaltyFeeAmount = 0;
-        if (
-            memberPackageSubscriptions[collection.artist].expirationTime >=
-            block.timestamp
-        ) {
-            royaltyFeeAmount = (fee * royaltyFee) / 2 / BASIS_POINT;
-        } else {
-            royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
-        }
+        royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
 
@@ -338,47 +283,6 @@ contract CollectionController is
             tokenId,
             royaltyFeeAmount
         );
-    }
-
-    /**
-     * @dev Function to subscribe to member package
-     */
-    function subscribeMemberPack(uint256 _packageId) external payable {
-        require(
-            memberPackageSubscriptions[_msgSender()].expirationTime <
-                block.timestamp,
-            "CollectionController: Member package not expired"
-        );
-
-        require(
-            activeMemberPackage.contains(_packageId),
-            "CollectionController: Invalid package ID"
-        );
-
-        MemberPackage memory memberPackage = memberPackages[_packageId];
-
-        if (memberPackage.paymentToken == address(0)) {
-            require(
-                msg.value == memberPackage.price,
-                "CollectionController: Not enough price"
-            );
-
-            payable(royaltyFeeTo).sendValue(memberPackage.price);
-        } else {
-            IERC20Upgradeable(memberPackage.paymentToken).safeTransferFrom(
-                _msgSender(),
-                royaltyFeeTo,
-                memberPackage.price
-            );
-        }
-
-        uint256 expirationTime = block.timestamp + memberPackage.duration;
-        memberPackageSubscriptions[_msgSender()] = MemberPackageSubscription(
-            _packageId,
-            expirationTime
-        );
-
-        emit MemberPackSubscribed(_msgSender(), _packageId, expirationTime);
     }
 
     /**
@@ -436,55 +340,6 @@ contract CollectionController is
      */
     function isLayerMinted(bytes memory layerHash) public view returns (bool) {
         return layerHashes[layerHash];
-    }
-
-    /**
-     * @dev get active member package
-     */
-    function getActiveMemberPackageId() public view returns (uint256[] memory) {
-        return activeMemberPackage.values();
-    }
-
-    /**
-     * @dev get active member package
-     */
-    function getActiveMemberPackage()
-        public
-        view
-        returns (MemberPackage[] memory)
-    {
-        uint256[] memory activePackageId = activeMemberPackage.values();
-        MemberPackage[] memory packages = new MemberPackage[](
-            activePackageId.length
-        );
-        for (uint256 i = 0; i < activePackageId.length; i++) {
-            packages[i] = memberPackages[activePackageId[i]];
-        }
-        return packages;
-    }
-
-    /**
-     * @dev get member package by id
-     */
-    function getMemberPackage(
-        uint256 packageId
-    ) public view returns (MemberPackage memory package, bool isActive) {
-        if (activeMemberPackage.contains(packageId)) {
-            isActive = true;
-        } else {
-            isActive = false;
-        }
-
-        package = memberPackages[packageId];
-    }
-
-    /**
-     * @dev get member package subscription
-     */
-    function getMemberPackageSubscription(
-        address user
-    ) public view returns (MemberPackageSubscription memory) {
-        return memberPackageSubscriptions[user];
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
@@ -577,103 +432,6 @@ contract CollectionController is
 
         collection.endTime = _endTime;
         collections[collectionId] = collection;
-    }
-
-    /**
-     * @dev Function to add new memberPackPrice
-     * @param _name new member pack name
-     * @param _price new member pack price
-     * @param _paymentToken new member pack payment token
-     * @param _duration new member pack duration
-     */
-    function addMemberPackage(
-        string memory _name,
-        uint256 _price,
-        address _paymentToken,
-        uint256 _duration
-    ) external onlyOwner {
-        require(_price > 0, "CollectionController: invalid member pack price");
-        require(
-            _duration > 0,
-            "CollectionController: invalid member pack duration"
-        );
-
-        uint256 memberPackageId = totalMemberPackage;
-        memberPackages[memberPackageId] = MemberPackage(
-            memberPackageId,
-            _name,
-            _price,
-            _paymentToken,
-            _duration
-        );
-
-        activeMemberPackage.add(memberPackageId);
-
-        emit MemberPackageCreated(
-            memberPackageId,
-            _name,
-            _price,
-            _paymentToken,
-            _duration
-        );
-        totalMemberPackage++;
-    }
-
-    /**
-     * @dev Function to update memberPackPrice
-     * @param _memberPackageId member pack id to update
-     * @param _name new member pack name
-     * @param _price new member pack price
-     * @param _paymentToken new member pack payment token
-     * @param _duration new member pack duration
-     */
-    function updateMemberPackage(
-        uint256 _memberPackageId,
-        string memory _name,
-        uint256 _price,
-        address _paymentToken,
-        uint256 _duration
-    ) external onlyOwner {
-        require(
-            _memberPackageId < totalMemberPackage &&
-                activeMemberPackage.contains(_memberPackageId),
-            "CollectionController: invalid member pack id"
-        );
-        require(_price > 0, "CollectionController: invalid member pack price");
-        require(
-            _duration > 0,
-            "CollectionController: invalid member pack duration"
-        );
-
-        MemberPackage storage memberPackage = memberPackages[_memberPackageId];
-        memberPackage.name = _name;
-        memberPackage.price = _price;
-        memberPackage.paymentToken = _paymentToken;
-        memberPackage.duration = _duration;
-
-        emit MemberPackageUpdated(
-            _memberPackageId,
-            _name,
-            _price,
-            _paymentToken,
-            _duration
-        );
-    }
-
-    /**
-     * @dev Function to delete memberPackage
-     * @param _memberPackageId member pack id to delete
-     */
-    function deleteMemberPackage(uint256 _memberPackageId) external onlyOwner {
-        require(
-            _memberPackageId < totalMemberPackage &&
-                activeMemberPackage.contains(_memberPackageId),
-            "CollectionController: invalid member pack id"
-        );
-
-        activeMemberPackage.remove(_memberPackageId);
-
-        emit MemberPackageDeleted(_memberPackageId);
     }
 
     /**
