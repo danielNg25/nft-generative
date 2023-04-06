@@ -72,7 +72,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        86400
+                        86400,
+                        true
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
 
@@ -87,7 +88,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        86400
+                        86400,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package price');
 
@@ -102,7 +104,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp + 86500,
                         timestamp + 86400,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -117,7 +120,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp - 1000,
                         timestamp - 100,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -132,7 +136,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package duration');
         });
@@ -150,7 +155,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
 
             const memberPackage = await memberPackageRegistry.getCreatorPackage(
@@ -178,7 +184,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
 
             const memberPackages =
@@ -211,7 +218,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -223,7 +231,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -379,7 +388,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -391,7 +401,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -436,6 +447,90 @@ describe('MemberPackageRegistry', () => {
         });
     });
 
+    describe('Active CreatorPackage', () => {
+        beforeEach(async () => {
+            let timestamp = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+            await memberPackageRegistry
+                .connect(owner)
+                .addCreatorPackage(
+                    10,
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    1,
+                    timestamp,
+                    timestamp + 86400,
+                    86400,
+                    true
+                );
+            await memberPackageRegistry
+                .connect(owner)
+                .addCreatorPackage(
+                    1,
+                    'Pro',
+                    parseEther('0.002'),
+                    ethers.constants.AddressZero,
+                    100,
+                    timestamp,
+                    timestamp + 86400,
+                    86400,
+                    false
+                );
+        });
+
+        it('Should active creator package failed', async () => {
+            await expect(
+                memberPackageRegistry.connect(user1).activeCreatorPackage(0)
+            ).to.be.revertedWith('Ownable: caller is not the owner');
+
+            await expect(
+                memberPackageRegistry.connect(owner).activeCreatorPackage(2)
+            ).to.be.revertedWith('PackageRegistry: invalid creator pack id');
+
+            await expect(
+                memberPackageRegistry.connect(owner).activeCreatorPackage(0)
+            ).to.be.revertedWith('PackageRegistry: package actived');
+
+            await skipTime(90000, ethers);
+            await expect(
+                memberPackageRegistry.connect(owner).activeCreatorPackage(1)
+            ).to.be.revertedWith('PackageRegistry: package expired');
+        });
+
+        it('Should active creator package successfully', async () => {
+            await memberPackageRegistry.connect(owner).activeCreatorPackage(1);
+
+            let creatorPackages =
+                await memberPackageRegistry.getActiveCreatorPackage();
+            expect(creatorPackages.length).to.equal(2);
+            let creatorPackage = await memberPackageRegistry.getCreatorPackage(
+                1
+            );
+            expect(creatorPackage.isActive).to.equal(true);
+            creatorPackage =
+                await memberPackageRegistry.getCreatorPackageByKeyId(1);
+            expect(creatorPackage.isActive).to.equal(true);
+            expect(creatorPackage.package.name).to.equal('Pro');
+            const creatorPackageIds =
+                await memberPackageRegistry.getActiveCreatorPackageId();
+            expect(creatorPackageIds.length).to.equal(2);
+            expect(creatorPackageIds[0]).to.equal(0);
+            expect(creatorPackageIds[1]).to.equal(1);
+
+            await memberPackageRegistry
+                .connect(user1)
+                .subscribeCreatorPackage(0, { value: parseEther('0.001') });
+
+            await memberPackageRegistry
+                .connect(owner)
+                .deactiveCreatorPackage(0);
+            await expect(
+                memberPackageRegistry.connect(owner).activeCreatorPackage(0)
+            ).to.be.revertedWith('PackageRegistry: package sold out');
+        });
+    });
+
     describe('Subscribe CreatorPackage', () => {
         beforeEach(async () => {
             let timestamp = (await ethers.provider.getBlock('latest'))
@@ -450,7 +545,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -462,7 +558,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp + 1000,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -607,7 +704,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        86400
+                        86400,
+                        true
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
 
@@ -622,7 +720,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        86400
+                        86400,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package price');
 
@@ -637,7 +736,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp + 86500,
                         timestamp + 86400,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -652,7 +752,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp - 1000,
                         timestamp - 100,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -667,7 +768,8 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
-                        0
+                        0,
+                        true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package duration');
         });
@@ -685,7 +787,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
 
             const memberPackage = await memberPackageRegistry.getUserPackage(0);
@@ -711,7 +814,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
 
             const memberPackages =
@@ -744,7 +848,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -756,7 +861,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -911,7 +1017,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -923,7 +1030,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -957,6 +1065,102 @@ describe('MemberPackageRegistry', () => {
 
             userPackages = await memberPackageRegistry.getActiveUserPackage();
             expect(userPackages.length).to.equal(0);
+            let timestamp = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+            await memberPackageRegistry
+                .connect(owner)
+                .updateUserPackage(
+                    1,
+                    'Pro',
+                    parseEther('0.002'),
+                    ethers.constants.AddressZero,
+                    100,
+                    timestamp,
+                    timestamp + 86400,
+                    86400
+                );
+
+            userPackages = await memberPackageRegistry.getActiveUserPackage();
+            expect(userPackages.length).to.equal(1);
+        });
+    });
+
+    describe('Active UserPackage', () => {
+        beforeEach(async () => {
+            let timestamp = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+            await memberPackageRegistry
+                .connect(owner)
+                .addUserPackage(
+                    10,
+                    'Standard',
+                    parseEther('0.001'),
+                    ethers.constants.AddressZero,
+                    1,
+                    timestamp,
+                    timestamp + 86400,
+                    86400,
+                    true
+                );
+            await memberPackageRegistry
+                .connect(owner)
+                .addUserPackage(
+                    1,
+                    'Pro',
+                    parseEther('0.002'),
+                    ethers.constants.AddressZero,
+                    100,
+                    timestamp,
+                    timestamp + 86400,
+                    86400,
+                    false
+                );
+        });
+
+        it('Should active user package failed', async () => {
+            await expect(
+                memberPackageRegistry.connect(user1).activeUserPackage(0)
+            ).to.be.revertedWith('Ownable: caller is not the owner');
+
+            await expect(
+                memberPackageRegistry.connect(owner).activeUserPackage(2)
+            ).to.be.revertedWith('PackageRegistry: invalid user pack id');
+
+            await expect(
+                memberPackageRegistry.connect(owner).activeUserPackage(0)
+            ).to.be.revertedWith('PackageRegistry: package actived');
+
+            await skipTime(90000, ethers);
+            await expect(
+                memberPackageRegistry.connect(owner).activeUserPackage(1)
+            ).to.be.revertedWith('PackageRegistry: package expired');
+        });
+
+        it('Should active user package successfully', async () => {
+            await memberPackageRegistry.connect(owner).activeUserPackage(1);
+
+            let userPackages =
+                await memberPackageRegistry.getActiveUserPackage();
+            expect(userPackages.length).to.equal(2);
+            let userPackage = await memberPackageRegistry.getUserPackage(1);
+            expect(userPackage.isActive).to.equal(true);
+            userPackage = await memberPackageRegistry.getUserPackageByKeyId(1);
+            expect(userPackage.isActive).to.equal(true);
+            expect(userPackage.package.name).to.equal('Pro');
+            const userPackageIds =
+                await memberPackageRegistry.getActiveUserPackageId();
+            expect(userPackageIds.length).to.equal(2);
+            expect(userPackageIds[0]).to.equal(0);
+            expect(userPackageIds[1]).to.equal(1);
+
+            await memberPackageRegistry
+                .connect(user1)
+                .subscribeUserPackage(0, { value: parseEther('0.001') });
+
+            await memberPackageRegistry.connect(owner).deactiveUserPackage(0);
+            await expect(
+                memberPackageRegistry.connect(owner).activeUserPackage(0)
+            ).to.be.revertedWith('PackageRegistry: package sold out');
         });
     });
 
@@ -974,7 +1178,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
             await memberPackageRegistry
                 .connect(owner)
@@ -983,10 +1188,11 @@ describe('MemberPackageRegistry', () => {
                     'Pro',
                     parseEther('0.002'),
                     ethers.constants.AddressZero,
-                    100,
+                    0,
                     timestamp + 1000,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    true
                 );
         });
 
@@ -1111,6 +1317,16 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry.connect(user2).subscribeUserPackage(0)
             ).to.be.revertedWith('PackageRegistry: Package sold out');
+        });
+    });
+
+    describe('Governance', () => {
+        it('Should set Fee to address successfully', async () => {
+            await expect(
+                memberPackageRegistry.connect(user1).setFeeTo(user2.address)
+            ).to.be.revertedWith('Ownable: caller is not the owner');
+            await memberPackageRegistry.setFeeTo(user2.address);
+            expect(await memberPackageRegistry.feeTo()).to.equal(user2.address);
         });
     });
 });

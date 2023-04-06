@@ -20,7 +20,7 @@ contract MemberPackageRegistry is
 
     uint256 private totalCreatorPackage;
     uint256 private totalUserPackage;
-    address public royaltyFeeTo;
+    address public feeTo;
 
     // Creator package
     struct MemberPackage {
@@ -68,7 +68,7 @@ contract MemberPackageRegistry is
         public userPackageExpirationTime;
 
     /* ========== EVENTS ========== */
-    event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
+    event FeeToAddressChanged(address oldAddress, address newAddress);
 
     // Creator package events
     event CreatorPackageCreated(
@@ -144,28 +144,22 @@ contract MemberPackageRegistry is
      * @dev Initialize function
      * must call right after contract is deployed
      */
-    function initialize(address _royaltyFeeTo) public initializer {
+    function initialize(address _feeTo) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
-        royaltyFeeTo = _royaltyFeeTo;
+        feeTo = _feeTo;
     }
 
     /**
-     * @dev function to set royaltyFeeTo address
-     * @param _royaltyFeeTo new royaltyFeeTo address
+     * @dev function to set feeTo address
+     * @param _feeTo new feeTo address
      */
-    function setRoyaltyFeeTo(address _royaltyFeeTo) external onlyOwner {
-        address oldFeeTo = royaltyFeeTo;
-        require(
-            _royaltyFeeTo != address(0),
-            "PackageRegistry: set to zero address"
-        );
-        require(
-            _royaltyFeeTo != oldFeeTo,
-            "PackageRegistry: royaltyFeeTo address set"
-        );
-        royaltyFeeTo = _royaltyFeeTo;
-        emit RoyaltyFeeToAddressChanged(oldFeeTo, _royaltyFeeTo);
+    function setFeeTo(address _feeTo) external onlyOwner {
+        address oldFeeTo = feeTo;
+        require(_feeTo != address(0), "PackageRegistry: set to zero address");
+        require(_feeTo != oldFeeTo, "PackageRegistry: feeTo address set");
+        feeTo = _feeTo;
+        emit FeeToAddressChanged(oldFeeTo, _feeTo);
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -800,11 +794,11 @@ contract MemberPackageRegistry is
                 "PackageRegistry: Not enough price"
             );
 
-            payable(royaltyFeeTo).sendValue(memberPackage.price);
+            payable(feeTo).sendValue(memberPackage.price);
         } else {
             IERC20Upgradeable(memberPackage.paymentToken).safeTransferFrom(
                 _msgSender(),
-                royaltyFeeTo,
+                feeTo,
                 memberPackage.price
             );
         }

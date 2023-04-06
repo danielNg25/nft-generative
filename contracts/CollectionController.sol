@@ -53,6 +53,9 @@ contract CollectionController is
     // mapping of minted layer id hash
     mapping(bytes => bool) private layerHashes;
 
+    // mapping used signature
+    mapping(bytes => bool) private invalidSignatures;
+
     // mapping owner address to own collections set
     mapping(address => EnumerableSetUpgradeable.UintSet)
         private artistToCollection;
@@ -148,18 +151,20 @@ contract CollectionController is
         bytes memory signature
     ) external {
         require(
-            verifyCollectionCreationMessage(
-                keyId,
-                name,
-                symbol,
-                baseUri,
-                paymentToken,
-                mintCap,
-                startTime,
-                endTime,
-                signatureExpTime,
-                signature
-            ),
+            invalidSignatures[signature] == false &&
+                verifyCollectionCreationMessage(
+                    keyId,
+                    msg.sender,
+                    name,
+                    symbol,
+                    baseUri,
+                    paymentToken,
+                    mintCap,
+                    startTime,
+                    endTime,
+                    signatureExpTime,
+                    signature
+                ),
             "CollectionController: invalid signature"
         );
 
@@ -188,7 +193,7 @@ contract CollectionController is
             endTime
         );
         artistToCollection[_msgSender()].add(totalCollection);
-
+        invalidSignatures[signature] = true;
         emit CollectionCreated(
             keyId,
             totalCollection,
@@ -219,25 +224,43 @@ contract CollectionController is
         string memory uri,
         uint256 fee,
         bytes memory layerHash,
+        uint256 signatureExpTime,
         bytes memory signature
     ) external payable nonReentrant {
+        require(
+            invalidSignatures[signature] == false &&
+                verifyMessage(
+                    collectionId,
+                    _msgSender(),
+                    fee,
+                    uri,
+                    layerHash,
+                    signatureExpTime,
+                    signature
+                ),
+            "CollectionController: invalid signature"
+        );
+        require(
+            signatureExpTime > block.timestamp,
+            "CollectionController: signature expired"
+        );
+
         require(
             !layerHashes[layerHash],
             "CollectionController: Layer combination already minted"
         );
         Collection memory collection = collections[collectionId];
         require(
-            collection.startTime <= block.timestamp ||
-                collection.startTime == 0,
+            collection.startTime <= block.timestamp,
             "CollectionController: collection not started yet"
         );
         require(
             collection.endTime > block.timestamp || collection.endTime == 0,
             "CollectionController: collection ended"
         );
+
         NFT nft = NFT(collection.collectionAddress);
-        uint256 royaltyFeeAmount = 0;
-        royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
+        uint256 royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
 
@@ -260,20 +283,10 @@ contract CollectionController is
             tokenId <= collection.mintCap,
             "CollectionController: max total supply exeeds"
         );
-        require(
-            verifyMessage(
-                collectionId,
-                _msgSender(),
-                fee,
-                tokenId,
-                uri,
-                layerHash,
-                signature
-            ),
-            "CollectionController: invalid signature"
-        );
-        layerHashes[layerHash] = true;
+
         nft.mint(_msgSender(), uri);
+        layerHashes[layerHash] = true;
+        invalidSignatures[signature] = true;
         emit NFTMinted(
             collectionId,
             collection.collectionAddress,
@@ -322,16 +335,6 @@ contract CollectionController is
         string memory uri = nFT.tokenURI(tokenId);
         address tokenOwner = nFT.ownerOf(tokenId);
         return (tokenOwner, uri);
-    }
-
-    /**
-     * @dev get next token will be minted by collection
-     */
-    function getNextTokenId(
-        uint256 collectionId
-    ) public view returns (uint256) {
-        Collection memory collection = collections[collectionId];
-        return NFT(collection.collectionAddress).totalSupply() + 1;
     }
 
     /**
@@ -389,11 +392,11 @@ contract CollectionController is
             "CollectionController: caller is not collection artist"
         );
         require(
-            collection.startTime > block.timestamp || collection.startTime == 0,
+            collection.startTime > block.timestamp,
             "CollectionController: collection already started"
         );
         require(
-            _startTime > block.timestamp || _startTime == 0,
+            _startTime > block.timestamp,
             "CollectionController: invalid start time"
         );
 
@@ -495,8 +498,8 @@ contract CollectionController is
             _verifier != oldVerifier,
             "CollectionController: feeTo address set"
         );
-        feeTo = _verifier;
-        emit FeeToAddressChanged(oldVerifier, _verifier);
+        verifier = _verifier;
+        emit VerifierAddressChanged(oldVerifier, _verifier);
     }
 
     /* ========== SIGNATURE FUNCTIONS ========== */
@@ -505,18 +508,18 @@ contract CollectionController is
         uint256 collectionID,
         address sender,
         uint256 fee,
-        uint256 tokenId,
         string memory uri,
         bytes memory layerHash,
+        uint256 signatureExpTime,
         bytes memory signature
     ) private view returns (bool) {
         bytes32 dataHash = encodeData(
             collectionID,
             sender,
             fee,
-            tokenId,
             uri,
-            layerHash
+            layerHash,
+            signatureExpTime
         );
         bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
         address recovered = ECDSA.recover(signHash, signature);
@@ -527,9 +530,9 @@ contract CollectionController is
         uint256 collectionID,
         address sender,
         uint256 fee,
-        uint256 tokenId,
         string memory uri,
-        bytes memory layerHash
+        bytes memory layerHash,
+        uint256 signatureExpTime
     ) private view returns (bytes32) {
         uint256 id;
         assembly {
@@ -542,15 +545,16 @@ contract CollectionController is
                     collectionID,
                     sender,
                     fee,
-                    tokenId,
                     uri,
-                    layerHash
+                    layerHash,
+                    signatureExpTime
                 )
             );
     }
 
     function verifyCollectionCreationMessage(
         uint256 keyId,
+        address sender,
         string memory name,
         string memory symbol,
         string memory baseUri,
@@ -563,6 +567,7 @@ contract CollectionController is
     ) private view returns (bool) {
         bytes32 dataHash = encodeCollectionCreationData(
             keyId,
+            sender,
             name,
             symbol,
             baseUri,
@@ -579,6 +584,7 @@ contract CollectionController is
 
     function encodeCollectionCreationData(
         uint256 keyId,
+        address sender,
         string memory name,
         string memory symbol,
         string memory baseUri,
@@ -597,6 +603,7 @@ contract CollectionController is
                 abi.encode(
                     id,
                     keyId,
+                    sender,
                     name,
                     symbol,
                     baseUri,
