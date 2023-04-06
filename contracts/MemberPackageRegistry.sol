@@ -48,7 +48,7 @@ contract MemberPackageRegistry is
     mapping(uint256 => uint256) private keyIdToCreatorPackage;
 
     // set of active creator package
-    EnumerableSetUpgradeable.UintSet private activeCreatorPackage;
+    EnumerableSetUpgradeable.UintSet private activeCreatorPackages;
 
     // mapping artist address to creator pack to expirations time
     mapping(address => mapping(uint256 => uint256))
@@ -61,7 +61,7 @@ contract MemberPackageRegistry is
     mapping(uint256 => uint256) private keyIdToUserPackage;
 
     // set of active user package
-    EnumerableSetUpgradeable.UintSet private activeUserPackage;
+    EnumerableSetUpgradeable.UintSet private activeUserPackages;
 
     // mapping artist address to user pack to expirations time
     mapping(address => mapping(uint256 => uint256))
@@ -80,7 +80,8 @@ contract MemberPackageRegistry is
         uint256 maxPackageSold,
         uint256 startTime,
         uint256 endTime,
-        uint256 duration
+        uint256 duration,
+        bool isActive
     );
 
     event CreatorPackageUpdated(
@@ -96,6 +97,7 @@ contract MemberPackageRegistry is
     );
 
     event CreatorPackageDeactived(uint256 packageId);
+    event CreatorPackageActived(uint256 packageId);
 
     event CreatorPackSubscribed(
         address indexed userAddress,
@@ -129,6 +131,7 @@ contract MemberPackageRegistry is
     );
 
     event UserPackageDeactived(uint256 packageId);
+    event UserPackageActived(uint256 packageId);
 
     event UserPackSubscribed(
         address indexed userAddress,
@@ -176,7 +179,7 @@ contract MemberPackageRegistry is
         view
         returns (uint256[] memory)
     {
-        return activeCreatorPackage.values();
+        return activeCreatorPackages.values();
     }
 
     /**
@@ -187,7 +190,7 @@ contract MemberPackageRegistry is
         view
         returns (MemberPackage[] memory)
     {
-        uint256[] memory activePackageId = activeCreatorPackage.values();
+        uint256[] memory activePackageId = activeCreatorPackages.values();
 
         return _getActiveMemberPackage(activePackageId, creatorPackages);
     }
@@ -202,7 +205,7 @@ contract MemberPackageRegistry is
         (package, isActive) = _getMemberPackageInfo(
             packageId,
             creatorPackages,
-            activeCreatorPackage
+            activeCreatorPackages
         );
     }
 
@@ -216,7 +219,7 @@ contract MemberPackageRegistry is
         (package, isActive) = _getMemberPackageInfo(
             keyIdToCreatorPackage[keyId],
             creatorPackages,
-            activeCreatorPackage
+            activeCreatorPackages
         );
     }
 
@@ -240,7 +243,7 @@ contract MemberPackageRegistry is
      * @dev get active user package
      */
     function getActiveUserPackageId() public view returns (uint256[] memory) {
-        return activeUserPackage.values();
+        return activeUserPackages.values();
     }
 
     /**
@@ -251,7 +254,7 @@ contract MemberPackageRegistry is
         view
         returns (MemberPackage[] memory)
     {
-        uint256[] memory activePackageId = activeUserPackage.values();
+        uint256[] memory activePackageId = activeUserPackages.values();
 
         return _getActiveMemberPackage(activePackageId, userPackages);
     }
@@ -266,7 +269,7 @@ contract MemberPackageRegistry is
         (package, isActive) = _getMemberPackageInfo(
             packageId,
             userPackages,
-            activeUserPackage
+            activeUserPackages
         );
     }
 
@@ -280,7 +283,7 @@ contract MemberPackageRegistry is
         (package, isActive) = _getMemberPackageInfo(
             keyIdToUserPackage[keyId],
             userPackages,
-            activeUserPackage
+            activeUserPackages
         );
     }
 
@@ -374,11 +377,13 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration
+        uint256 _duration,
+        bool _isActive
     ) external onlyOwner {
         uint256 creatorPackageId = totalCreatorPackage;
         _addMemberPackage(
             creatorPackages,
+            keyIdToCreatorPackage,
             creatorPackageId,
             _keyId,
             _name,
@@ -390,7 +395,7 @@ contract MemberPackageRegistry is
             _duration
         );
 
-        activeCreatorPackage.add(creatorPackageId);
+        if (_isActive) activeCreatorPackages.add(creatorPackageId);
 
         emit CreatorPackageCreated(
             _keyId,
@@ -401,7 +406,8 @@ contract MemberPackageRegistry is
             _maxPackageSell,
             _startTime,
             _endTime,
-            _duration
+            _duration,
+            _isActive
         );
         totalCreatorPackage++;
     }
@@ -434,7 +440,7 @@ contract MemberPackageRegistry is
 
         uint256 keyId = _updateMemberPackage(
             creatorPackages,
-            activeCreatorPackage,
+            activeCreatorPackages,
             _creatorPackageId,
             _name,
             _price,
@@ -466,14 +472,37 @@ contract MemberPackageRegistry is
         uint256 _creatorPackageId
     ) external onlyOwner {
         require(
-            _creatorPackageId < totalCreatorPackage &&
-                activeCreatorPackage.contains(_creatorPackageId),
+            _creatorPackageId < totalCreatorPackage,
             "PackageRegistry: invalid creator pack id"
         );
+        require(
+            activeCreatorPackages.contains(_creatorPackageId),
+            "PackageRegistry: creator pack deactived"
+        );
 
-        activeCreatorPackage.remove(_creatorPackageId);
+        activeCreatorPackages.remove(_creatorPackageId);
 
         emit CreatorPackageDeactived(_creatorPackageId);
+    }
+
+    /**
+     * @dev Function to active creator package
+     * @param _creatorPackageId creator pack id to active
+     */
+    function activeCreatorPackage(
+        uint256 _creatorPackageId
+    ) external onlyOwner {
+        require(
+            _creatorPackageId < totalCreatorPackage,
+            "PackageRegistry: invalid creator pack id"
+        );
+        _activeMemberPackage(
+            activeCreatorPackages,
+            creatorPackages,
+            _creatorPackageId
+        );
+
+        emit CreatorPackageActived(_creatorPackageId);
     }
 
     // User package functions
@@ -496,11 +525,13 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration
+        uint256 _duration,
+        bool _isActive
     ) external onlyOwner {
         uint256 userPackageId = totalUserPackage;
         _addMemberPackage(
             userPackages,
+            keyIdToUserPackage,
             userPackageId,
             _keyId,
             _name,
@@ -512,7 +543,7 @@ contract MemberPackageRegistry is
             _duration
         );
 
-        activeUserPackage.add(userPackageId);
+        if (_isActive) activeUserPackages.add(userPackageId);
 
         emit UserPackageCreated(
             _keyId,
@@ -555,7 +586,7 @@ contract MemberPackageRegistry is
         );
         uint256 keyId = _updateMemberPackage(
             userPackages,
-            activeUserPackage,
+            activeUserPackages,
             _userPackageId,
             _name,
             _price,
@@ -585,14 +616,31 @@ contract MemberPackageRegistry is
      */
     function deactiveUserPackage(uint256 _userPackageId) external onlyOwner {
         require(
-            _userPackageId < totalUserPackage &&
-                activeUserPackage.contains(_userPackageId),
+            _userPackageId < totalUserPackage,
             "PackageRegistry: invalid user pack id"
         );
+        require(
+            activeUserPackages.contains(_userPackageId),
+            "PackageRegistry: user pack deactived"
+        );
 
-        activeUserPackage.remove(_userPackageId);
+        activeUserPackages.remove(_userPackageId);
 
         emit UserPackageDeactived(_userPackageId);
+    }
+
+    /**
+     * @dev Function to active user package
+     * @param _userPackageId user pack id to active
+     */
+    function activeUserPackage(uint256 _userPackageId) external onlyOwner {
+        require(
+            _userPackageId < totalUserPackage,
+            "PackageRegistry: invalid user pack id"
+        );
+        _activeMemberPackage(activeUserPackages, userPackages, _userPackageId);
+
+        emit UserPackageActived(_userPackageId);
     }
 
     // User functions
@@ -610,7 +658,7 @@ contract MemberPackageRegistry is
         );
 
         require(
-            activeCreatorPackage.contains(_packageId),
+            activeCreatorPackages.contains(_packageId),
             "PackageRegistry: Package deactived"
         );
 
@@ -636,7 +684,7 @@ contract MemberPackageRegistry is
         );
 
         require(
-            activeUserPackage.contains(_packageId),
+            activeUserPackages.contains(_packageId),
             "PackageRegistry: Package deactived"
         );
 
@@ -653,6 +701,7 @@ contract MemberPackageRegistry is
 
     function _addMemberPackage(
         mapping(uint256 => MemberPackage) storage _memberPackages,
+        mapping(uint256 => uint256) storage _keyIdToMemberPackageId,
         uint256 _memberPackageId,
         uint256 _keyId,
         string memory _name,
@@ -669,7 +718,7 @@ contract MemberPackageRegistry is
             "PackageRegistry: invalid package time"
         );
         require(_duration > 0, "PackageRegistry: invalid package duration");
-
+        _keyIdToMemberPackageId[_keyId] = _memberPackageId;
         _memberPackages[_memberPackageId] = MemberPackage(
             _keyId,
             _memberPackageId,
@@ -773,5 +822,27 @@ contract MemberPackageRegistry is
             _memberPackageId
         ] = expirationTime;
         _memberPackages[_memberPackageId].packageSold++;
+    }
+
+    function _activeMemberPackage(
+        EnumerableSetUpgradeable.UintSet storage _activeMemberSet,
+        mapping(uint256 => MemberPackage) storage _memberPackages,
+        uint256 _memberPackageId
+    ) internal {
+        require(
+            !_activeMemberSet.contains(_memberPackageId),
+            "PackageRegistry: package actived"
+        );
+        MemberPackage memory memberPackage = _memberPackages[_memberPackageId];
+        require(
+            memberPackage.endTime > block.timestamp,
+            "PackageRegistry: package expired"
+        );
+        require(
+            memberPackage.maxPackageSold > memberPackage.packageSold,
+            "PackageRegistry: package sold out"
+        );
+
+        _activeMemberSet.add(_memberPackageId);
     }
 }
