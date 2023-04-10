@@ -331,8 +331,10 @@ contract MemberPackageRegistry is
             storage memberPackageExpirationTime
     ) internal view returns (MemberPackageSubscription[] memory) {
         uint256 length;
+        uint256[] memory packageIds = new uint256[](totalPackage);
         for (uint256 i = 0; i < totalPackage; i++) {
             if (memberPackageExpirationTime[user][i] > block.timestamp) {
+                packageIds[length] = i;
                 length++;
             }
         }
@@ -342,8 +344,8 @@ contract MemberPackageRegistry is
 
         for (uint256 i = 0; i < length; i++) {
             packages[i] = MemberPackageSubscription(
-                i,
-                memberPackageExpirationTime[user][i]
+                packageIds[i],
+                memberPackageExpirationTime[user][packageIds[i]]
             );
         }
         return packages;

@@ -133,4 +133,4 @@ test-results
 typechain-types
 .openzeppelin
 
-contract.json
+contracts.json

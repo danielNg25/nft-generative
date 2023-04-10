@@ -1221,30 +1221,10 @@ describe('MemberPackageRegistry', () => {
         });
 
         it('Should subscribe user package successfully', async () => {
+            await skipTime(2000, ethers);
             let timestamp = (await ethers.provider.getBlock('latest'))
                 .timestamp;
-            await expect(
-                memberPackageRegistry
-                    .connect(user1)
-                    .subscribeUserPackage(0, { value: parseEther('0.001') })
-            ).to.changeEtherBalances(
-                [user1.address, feeTo.address],
-                [parseEther('-0.001'), parseEther('0.001')]
-            );
-            let UserPackage = await memberPackageRegistry.getUserPackage(0);
-            expect(UserPackage.package.packageSold).to.equal(1);
-            let UserPackageSubscripts =
-                await memberPackageRegistry.getUserPackageSubscription(
-                    user1.address
-                );
-            expect(UserPackageSubscripts.length).to.equal(1);
-            expect(UserPackageSubscripts[0].packageId).to.equal(0);
-            let expirationTime = timestamp + 86400 + 1;
-            expect(UserPackageSubscripts[0].expirationTime).to.equal(
-                expirationTime
-            );
 
-            await skipTime(2000, ethers);
             await expect(
                 memberPackageRegistry
                     .connect(user1)
@@ -1253,7 +1233,28 @@ describe('MemberPackageRegistry', () => {
                 [user1.address, feeTo.address],
                 [parseEther('-0.002'), parseEther('0.002')]
             );
-            UserPackage = await memberPackageRegistry.getUserPackage(1);
+            let UserPackage = await memberPackageRegistry.getUserPackage(1);
+            expect(UserPackage.package.packageSold).to.equal(1);
+            let UserPackageSubscripts =
+                await memberPackageRegistry.getUserPackageSubscription(
+                    user1.address
+                );
+            expect(UserPackageSubscripts.length).to.equal(1);
+            expect(UserPackageSubscripts[0].packageId).to.equal(1);
+            let expirationTime = timestamp + 86400 + 1;
+            expect(UserPackageSubscripts[0].expirationTime).to.equal(
+                expirationTime
+            );
+
+            await expect(
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeUserPackage(0, { value: parseEther('0.001') })
+            ).to.changeEtherBalances(
+                [user1.address, feeTo.address],
+                [parseEther('-0.001'), parseEther('0.001')]
+            );
+            UserPackage = await memberPackageRegistry.getUserPackage(0);
             expect(UserPackage.package.packageSold).to.equal(1);
             UserPackageSubscripts =
                 await memberPackageRegistry.getUserPackageSubscription(
@@ -1279,7 +1280,7 @@ describe('MemberPackageRegistry', () => {
             expect(UserPackageSubscripts.length).to.equal(2);
             expect(UserPackageSubscripts[0].packageId).to.equal(0);
             expect(UserPackageSubscripts[0].expirationTime).to.equal(
-                expirationTime + 86400
+                expirationTime + 86400 + 1
             );
         });
 
