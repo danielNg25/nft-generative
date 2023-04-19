@@ -3,7 +3,7 @@ import * as hre from 'hardhat';
 async function main() {
     try {
         await hre.run('verify:verify', {
-            address: '0x3D8E8695bdE351B0b584fcb6F8a62599b20a5d8e',
+            address: '0x4671773772078a33ddAA432DC96a7e811b098b8b',
             constructorArguments: [],
         });
     } catch (err) {

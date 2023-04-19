@@ -32,7 +32,7 @@ async function main() {
     const memberPackageRegistry: MemberPackageRegistry = <
         MemberPackageRegistry
     >await upgrades.upgradeProxy(
-        '0x0F99E5baD2814EB79587c1073aF640B514DaC581',
+        '0x0f99e5bad2814eb79587c1073af640b514dac581',
         MemberPackageRegistry
     );
     await memberPackageRegistry.deployed();

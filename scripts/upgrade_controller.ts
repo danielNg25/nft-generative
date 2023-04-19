@@ -31,7 +31,7 @@ async function main() {
 
     const controller: CollectionController = <CollectionController>(
         await upgrades.upgradeProxy(
-            '0xDb0d142373a516698aC90f9a63AB65347f67edBe',
+            '0x331b5d2652495b2026Af78cE2C66564837FAAe6A',
             CollectionController
         )
     );

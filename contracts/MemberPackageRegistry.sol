@@ -63,7 +63,7 @@ contract MemberPackageRegistry is
     // set of active user package
     EnumerableSetUpgradeable.UintSet private activeUserPackages;
 
-    // mapping artist address to user pack to expirations time
+    // mapping user address to user pack to expirations time
     mapping(address => mapping(uint256 => uint256))
         public userPackageExpirationTime;
 
@@ -102,7 +102,8 @@ contract MemberPackageRegistry is
     event CreatorPackSubscribed(
         address indexed userAddress,
         uint256 packageId,
-        uint256 expirationTime
+        uint256 expirationTime,
+        uint256 _quantity
     );
 
     // User package events
@@ -136,7 +137,8 @@ contract MemberPackageRegistry is
     event UserPackSubscribed(
         address indexed userAddress,
         uint256 packageId,
-        uint256 expirationTime
+        uint256 expirationTime,
+        uint256 _quantity
     );
 
     /* ========== GOVERNANCE ========== */
@@ -646,7 +648,8 @@ contract MemberPackageRegistry is
      * @param _packageId ID of creator package
      */
     function subscribeCreatorPackage(
-        uint256 _packageId
+        uint256 _packageId,
+        uint256 _quantity
     ) external payable nonReentrant {
         require(
             _packageId < totalCreatorPackage,
@@ -661,10 +664,16 @@ contract MemberPackageRegistry is
         uint256 expirationTime = _subscribeMemberPackage(
             creatorPackageExpirationTime,
             creatorPackages,
-            _packageId
+            _packageId,
+            _quantity
         );
 
-        emit CreatorPackSubscribed(_msgSender(), _packageId, expirationTime);
+        emit CreatorPackSubscribed(
+            _msgSender(),
+            _packageId,
+            expirationTime,
+            _quantity
+        );
     }
 
     /**
@@ -672,7 +681,8 @@ contract MemberPackageRegistry is
      * @param _packageId ID of user package
      */
     function subscribeUserPackage(
-        uint256 _packageId
+        uint256 _packageId,
+        uint256 _quantity
     ) external payable nonReentrant {
         require(
             _packageId < totalUserPackage,
@@ -687,10 +697,16 @@ contract MemberPackageRegistry is
         uint256 expirationTime = _subscribeMemberPackage(
             userPackageExpirationTime,
             userPackages,
-            _packageId
+            _packageId,
+            _quantity
         );
 
-        emit UserPackSubscribed(_msgSender(), _packageId, expirationTime);
+        emit UserPackSubscribed(
+            _msgSender(),
+            _packageId,
+            expirationTime,
+            _quantity
+        );
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -771,7 +787,8 @@ contract MemberPackageRegistry is
         mapping(address => mapping(uint256 => uint256))
             storage _memberPackageExpirationTime,
         mapping(uint256 => MemberPackage) storage _memberPackages,
-        uint256 _memberPackageId
+        uint256 _memberPackageId,
+        uint256 _quantity
     ) internal returns (uint256 expirationTime) {
         MemberPackage memory memberPackage = _memberPackages[_memberPackageId];
         require(
@@ -784,24 +801,24 @@ contract MemberPackageRegistry is
             "PackageRegistry: Package ended"
         );
 
+        require(_quantity > 0, "PackageRegistry: Invalid quantity");
+
         require(
             memberPackage.maxPackageSold == 0 ||
-                memberPackage.maxPackageSold > memberPackage.packageSold,
+                memberPackage.maxPackageSold >=
+                (memberPackage.packageSold + _quantity),
             "PackageRegistry: Package sold out"
         );
-
+        uint256 _price = memberPackage.price * _quantity;
         if (memberPackage.paymentToken == address(0)) {
-            require(
-                msg.value == memberPackage.price,
-                "PackageRegistry: Not enough price"
-            );
+            require(msg.value == _price, "PackageRegistry: Not enough price");
 
-            payable(feeTo).sendValue(memberPackage.price);
+            payable(feeTo).sendValue(_price);
         } else {
             IERC20Upgradeable(memberPackage.paymentToken).safeTransferFrom(
                 _msgSender(),
                 feeTo,
-                memberPackage.price
+                _price
             );
         }
 
@@ -810,14 +827,20 @@ contract MemberPackageRegistry is
         ];
 
         if (oldExpirationTime > block.timestamp) {
-            expirationTime = oldExpirationTime + memberPackage.duration;
+            expirationTime =
+                oldExpirationTime +
+                _quantity *
+                memberPackage.duration;
         } else {
-            expirationTime = block.timestamp + memberPackage.duration;
+            expirationTime =
+                block.timestamp +
+                _quantity *
+                memberPackage.duration;
         }
         _memberPackageExpirationTime[_msgSender()][
             _memberPackageId
         ] = expirationTime;
-        _memberPackages[_memberPackageId].packageSold++;
+        _memberPackages[_memberPackageId].packageSold += _quantity;
     }
 
     function _activeMemberPackage(

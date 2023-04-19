@@ -520,7 +520,7 @@ describe('MemberPackageRegistry', () => {
 
             await memberPackageRegistry
                 .connect(user1)
-                .subscribeCreatorPackage(0, { value: parseEther('0.001') });
+                .subscribeCreatorPackage(0, 1, { value: parseEther('0.001') });
 
             await memberPackageRegistry
                 .connect(owner)
@@ -565,25 +565,35 @@ describe('MemberPackageRegistry', () => {
 
         it('Should subscribe creator package failed', async () => {
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(0)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Not enough price');
 
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(2)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(2, 1)
             ).to.be.revertedWith('PackageRegistry: Invalid creator package id');
 
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(1)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(1, 1)
             ).to.be.revertedWith('PackageRegistry: Package not started');
 
             await memberPackageRegistry.deactiveCreatorPackage(0);
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(0)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Package deactived');
 
             await skipTime(86500, ethers);
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(1)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(1, 1)
             ).to.be.revertedWith('PackageRegistry: Package ended');
         });
 
@@ -593,7 +603,9 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeCreatorPackage(0, { value: parseEther('0.001') })
+                    .subscribeCreatorPackage(0, 1, {
+                        value: parseEther('0.001'),
+                    })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
                 [parseEther('-0.001'), parseEther('0.001')]
@@ -617,7 +629,9 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeCreatorPackage(1, { value: parseEther('0.002') })
+                    .subscribeCreatorPackage(1, 1, {
+                        value: parseEther('0.002'),
+                    })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
                 [parseEther('-0.002'), parseEther('0.002')]
@@ -634,7 +648,9 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeCreatorPackage(0, { value: parseEther('0.001') })
+                    .subscribeCreatorPackage(0, 1, {
+                        value: parseEther('0.001'),
+                    })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
                 [parseEther('-0.001'), parseEther('0.001')]
@@ -667,7 +683,9 @@ describe('MemberPackageRegistry', () => {
             );
             timestamp = (await ethers.provider.getBlock('latest')).timestamp;
             await expect(
-                memberPackageRegistry.connect(user1).subscribeCreatorPackage(0)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeCreatorPackage(0, 1)
             ).to.changeTokenBalances(
                 mockERC20,
                 [user1.address, feeTo.address],
@@ -684,7 +702,9 @@ describe('MemberPackageRegistry', () => {
             );
 
             await expect(
-                memberPackageRegistry.connect(user2).subscribeCreatorPackage(0)
+                memberPackageRegistry
+                    .connect(user2)
+                    .subscribeCreatorPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Package sold out');
         });
     });
@@ -1155,7 +1175,7 @@ describe('MemberPackageRegistry', () => {
 
             await memberPackageRegistry
                 .connect(user1)
-                .subscribeUserPackage(0, { value: parseEther('0.001') });
+                .subscribeUserPackage(0, 1, { value: parseEther('0.001') });
 
             await memberPackageRegistry.connect(owner).deactiveUserPackage(0);
             await expect(
@@ -1198,25 +1218,31 @@ describe('MemberPackageRegistry', () => {
 
         it('Should subscribe user package failed', async () => {
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(0)
+                memberPackageRegistry.connect(user1).subscribeUserPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Not enough price');
 
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(2)
+                memberPackageRegistry
+                    .connect(user1)
+                    .subscribeUserPackage(0, 3, { value: parseEther('0.004') })
+            ).to.be.revertedWith('PackageRegistry: Not enough price');
+
+            await expect(
+                memberPackageRegistry.connect(user1).subscribeUserPackage(2, 1)
             ).to.be.revertedWith('PackageRegistry: Invalid user package id');
 
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(1)
+                memberPackageRegistry.connect(user1).subscribeUserPackage(1, 1)
             ).to.be.revertedWith('PackageRegistry: Package not started');
 
             await memberPackageRegistry.deactiveUserPackage(0);
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(0)
+                memberPackageRegistry.connect(user1).subscribeUserPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Package deactived');
 
             await skipTime(86500, ethers);
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(1)
+                memberPackageRegistry.connect(user1).subscribeUserPackage(1, 1)
             ).to.be.revertedWith('PackageRegistry: Package ended');
         });
 
@@ -1228,20 +1254,20 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeUserPackage(1, { value: parseEther('0.002') })
+                    .subscribeUserPackage(1, 3, { value: parseEther('0.006') })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
-                [parseEther('-0.002'), parseEther('0.002')]
+                [parseEther('-0.006'), parseEther('0.006')]
             );
             let UserPackage = await memberPackageRegistry.getUserPackage(1);
-            expect(UserPackage.package.packageSold).to.equal(1);
+            expect(UserPackage.package.packageSold).to.equal(3);
             let UserPackageSubscripts =
                 await memberPackageRegistry.getUserPackageSubscription(
                     user1.address
                 );
             expect(UserPackageSubscripts.length).to.equal(1);
             expect(UserPackageSubscripts[0].packageId).to.equal(1);
-            let expirationTime = timestamp + 86400 + 1;
+            let expirationTime = timestamp + 86400 * 3 + 1;
             expect(UserPackageSubscripts[0].expirationTime).to.equal(
                 expirationTime
             );
@@ -1249,7 +1275,7 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeUserPackage(0, { value: parseEther('0.001') })
+                    .subscribeUserPackage(0, 1, { value: parseEther('0.001') })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
                 [parseEther('-0.001'), parseEther('0.001')]
@@ -1266,21 +1292,21 @@ describe('MemberPackageRegistry', () => {
             await expect(
                 memberPackageRegistry
                     .connect(user1)
-                    .subscribeUserPackage(0, { value: parseEther('0.001') })
+                    .subscribeUserPackage(1, 1, { value: parseEther('0.002') })
             ).to.changeEtherBalances(
                 [user1.address, feeTo.address],
-                [parseEther('-0.001'), parseEther('0.001')]
+                [parseEther('-0.002'), parseEther('0.002')]
             );
-            UserPackage = await memberPackageRegistry.getUserPackage(0);
-            expect(UserPackage.package.packageSold).to.equal(2);
+            UserPackage = await memberPackageRegistry.getUserPackage(1);
+            expect(UserPackage.package.packageSold).to.equal(4);
             UserPackageSubscripts =
                 await memberPackageRegistry.getUserPackageSubscription(
                     user1.address
                 );
             expect(UserPackageSubscripts.length).to.equal(2);
-            expect(UserPackageSubscripts[0].packageId).to.equal(0);
-            expect(UserPackageSubscripts[0].expirationTime).to.equal(
-                expirationTime + 86400 + 1
+            expect(UserPackageSubscripts[1].packageId).to.equal(1);
+            expect(UserPackageSubscripts[1].expirationTime).to.equal(
+                expirationTime + 86400
             );
         });
 
@@ -1299,7 +1325,7 @@ describe('MemberPackageRegistry', () => {
             );
             timestamp = (await ethers.provider.getBlock('latest')).timestamp;
             await expect(
-                memberPackageRegistry.connect(user1).subscribeUserPackage(0)
+                memberPackageRegistry.connect(user1).subscribeUserPackage(0, 1)
             ).to.changeTokenBalances(
                 mockERC20,
                 [user1.address, feeTo.address],
@@ -1316,7 +1342,7 @@ describe('MemberPackageRegistry', () => {
             );
 
             await expect(
-                memberPackageRegistry.connect(user2).subscribeUserPackage(0)
+                memberPackageRegistry.connect(user2).subscribeUserPackage(0, 1)
             ).to.be.revertedWith('PackageRegistry: Package sold out');
         });
     });
