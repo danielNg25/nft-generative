@@ -726,7 +726,8 @@ contract MemberPackageRegistry is
     ) internal {
         require(_price > 0, "PackageRegistry: invalid package price");
         require(
-            _startTime < _endTime && _endTime > block.timestamp,
+            _endTime == 0 ||
+                (_startTime < _endTime && _endTime > block.timestamp),
             "PackageRegistry: invalid package time"
         );
         require(_duration > 0, "PackageRegistry: invalid package duration");
@@ -759,14 +760,15 @@ contract MemberPackageRegistry is
     ) internal returns (uint256) {
         require(_price > 0, "PackageRegistry: invalid package price");
         require(
-            _startTime < _endTime && _endTime > block.timestamp,
+            _endTime == 0 ||
+                (_startTime < _endTime && _endTime > block.timestamp),
             "PackageRegistry: invalid package time"
         );
         require(_duration > 0, "PackageRegistry: invalid package duration");
 
         MemberPackage storage memberPackage = _memberPackages[_memberPackageId];
         require(
-            _maxPackageSell > memberPackage.packageSold,
+            _maxPackageSell == 0 || _maxPackageSell > memberPackage.packageSold,
             "PackageRegistry: invalid max package sell"
         );
         memberPackage.name = _name;
@@ -797,7 +799,8 @@ contract MemberPackageRegistry is
         );
 
         require(
-            memberPackage.endTime >= block.timestamp,
+            memberPackage.endTime == 0 ||
+                memberPackage.endTime >= block.timestamp,
             "PackageRegistry: Package ended"
         );
 
@@ -854,11 +857,13 @@ contract MemberPackageRegistry is
         );
         MemberPackage memory memberPackage = _memberPackages[_memberPackageId];
         require(
-            memberPackage.endTime > block.timestamp,
+            memberPackage.endTime == 0 ||
+                memberPackage.endTime > block.timestamp,
             "PackageRegistry: package expired"
         );
         require(
-            memberPackage.maxPackageSold > memberPackage.packageSold,
+            memberPackage.maxPackageSold == 0 ||
+                memberPackage.maxPackageSold > memberPackage.packageSold,
             "PackageRegistry: package sold out"
         );
 
