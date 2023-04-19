@@ -172,12 +172,9 @@ contract CollectionController is
             signatureExpTime > block.timestamp,
             "CollectionController: signature expired"
         );
+
         require(
-            startTime > block.timestamp || startTime == 0,
-            "CollectionController: invalid start time"
-        );
-        require(
-            endTime > startTime || endTime == 0,
+            endTime > startTime && endTime > block.timestamp || endTime == 0,
             "CollectionController: invalid end time"
         );
         NFT newNFT = new NFT(name, symbol, baseUri);

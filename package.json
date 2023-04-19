@@ -6,7 +6,10 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "deploy": "hardhat run scripts/deploy_all.ts",
-        "verify": "hardhat run scripts/verify.ts"
+        "verify": "hardhat run scripts/verify.ts",
+        "upgrade-controller": "hardhat run scripts/upgrade_controller.ts",
+        "upgrade-registry": "hardhat run scripts/upgrade_registry.ts",
+        "verify-specific": "hardhat run scripts/verify_specific.ts"
     },
     "repository": {
         "type": "git",
