@@ -73,6 +73,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp,
                         timestamp + 86400,
                         86400,
+                        0,
                         true
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
@@ -89,6 +90,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp,
                         timestamp + 86400,
                         86400,
+                        0,
                         true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package price');
@@ -104,6 +106,7 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp + 86500,
                         timestamp + 86400,
+                        0,
                         0,
                         true
                     )
@@ -121,6 +124,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp - 1000,
                         timestamp - 100,
                         0,
+                        0,
                         true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
@@ -136,6 +140,7 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
+                        0,
                         0,
                         true
                     )
@@ -156,6 +161,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
 
@@ -185,6 +191,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
 
@@ -219,6 +226,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -232,6 +240,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -250,7 +259,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
 
@@ -265,7 +275,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid creator pack id');
 
@@ -280,7 +291,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp + 106400,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -295,24 +307,10 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp - 10000,
                         timestamp - 1000,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
-
-            await expect(
-                memberPackageRegistry
-                    .connect(owner)
-                    .updateCreatorPackage(
-                        0,
-                        'Super Standard',
-                        parseEther('0.002'),
-                        ethers.constants.AddressZero,
-                        0,
-                        timestamp,
-                        timestamp + 86400,
-                        864000
-                    )
-            ).to.be.revertedWith('PackageRegistry: invalid max package sell');
         });
 
         it('Should update creator package successfully', async () => {
@@ -329,7 +327,8 @@ describe('MemberPackageRegistry', () => {
                     1000,
                     timestamp + 86400,
                     timestamp + 106400,
-                    864000
+                    864000,
+                    0
                 );
 
             const memberPackage = await memberPackageRegistry.getCreatorPackage(
@@ -355,7 +354,8 @@ describe('MemberPackageRegistry', () => {
                     1000,
                     timestamp + 86400,
                     timestamp + 106400,
-                    864000
+                    864000,
+                    1
                 );
 
             const memberPackage1 =
@@ -389,6 +389,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -402,6 +403,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -462,6 +464,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -475,6 +478,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     false
                 );
         });
@@ -546,6 +550,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -559,6 +564,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp + 1000,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -664,7 +670,7 @@ describe('MemberPackageRegistry', () => {
             expect(creatorPackageSubscripts.length).to.equal(2);
             expect(creatorPackageSubscripts[0].packageId).to.equal(0);
             expect(creatorPackageSubscripts[0].expirationTime).to.equal(
-                expirationTime + 86400
+                expirationTime + 86400 - 1
             );
         });
 
@@ -679,7 +685,8 @@ describe('MemberPackageRegistry', () => {
                 1,
                 timestamp,
                 timestamp + 86400,
-                86400
+                86400,
+                0
             );
             timestamp = (await ethers.provider.getBlock('latest')).timestamp;
             await expect(
@@ -725,6 +732,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp,
                         timestamp + 86400,
                         86400,
+                        0,
                         true
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
@@ -741,6 +749,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp,
                         timestamp + 86400,
                         86400,
+                        0,
                         true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package price');
@@ -756,6 +765,7 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp + 86500,
                         timestamp + 86400,
+                        0,
                         0,
                         true
                     )
@@ -773,6 +783,7 @@ describe('MemberPackageRegistry', () => {
                         timestamp - 1000,
                         timestamp - 100,
                         0,
+                        0,
                         true
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
@@ -788,6 +799,7 @@ describe('MemberPackageRegistry', () => {
                         100,
                         timestamp,
                         timestamp + 86400,
+                        0,
                         0,
                         true
                     )
@@ -808,6 +820,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
 
@@ -835,6 +848,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
 
@@ -869,6 +883,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -882,6 +897,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -900,7 +916,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('Ownable: caller is not the owner');
 
@@ -915,7 +932,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid user pack id');
 
@@ -930,7 +948,8 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp + 106400,
                         timestamp + 86400,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
 
@@ -945,24 +964,10 @@ describe('MemberPackageRegistry', () => {
                         1000,
                         timestamp - 10000,
                         timestamp - 1000,
-                        864000
+                        864000,
+                        0
                     )
             ).to.be.revertedWith('PackageRegistry: invalid package time');
-
-            await expect(
-                memberPackageRegistry
-                    .connect(owner)
-                    .updateUserPackage(
-                        0,
-                        'Super Standard',
-                        parseEther('0.002'),
-                        ethers.constants.AddressZero,
-                        0,
-                        timestamp,
-                        timestamp + 86400,
-                        864000
-                    )
-            ).to.be.revertedWith('PackageRegistry: invalid max package sell');
         });
 
         it('Should update user package successfully', async () => {
@@ -979,7 +984,8 @@ describe('MemberPackageRegistry', () => {
                     1000,
                     timestamp + 86400,
                     timestamp + 106400,
-                    864000
+                    864000,
+                    0
                 );
 
             const memberPackage = await memberPackageRegistry.getUserPackage(0);
@@ -1003,7 +1009,8 @@ describe('MemberPackageRegistry', () => {
                     1000,
                     timestamp + 86400,
                     timestamp + 106400,
-                    864000
+                    864000,
+                    1
                 );
 
             const memberPackage1 = await memberPackageRegistry.getUserPackage(
@@ -1038,6 +1045,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -1051,6 +1059,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -1097,7 +1106,8 @@ describe('MemberPackageRegistry', () => {
                     100,
                     timestamp,
                     timestamp + 86400,
-                    86400
+                    86400,
+                    1
                 );
 
             userPackages = await memberPackageRegistry.getActiveUserPackage();
@@ -1120,6 +1130,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -1133,6 +1144,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    1,
                     false
                 );
         });
@@ -1199,6 +1211,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp,
                     timestamp + 86400,
                     86400,
+                    0,
                     true
                 );
             await memberPackageRegistry
@@ -1212,6 +1225,7 @@ describe('MemberPackageRegistry', () => {
                     timestamp + 1000,
                     timestamp + 86400,
                     86400,
+                    1,
                     true
                 );
         });
@@ -1321,7 +1335,8 @@ describe('MemberPackageRegistry', () => {
                 1,
                 timestamp,
                 timestamp + 86400,
-                86400
+                86400,
+                0
             );
             timestamp = (await ethers.provider.getBlock('latest')).timestamp;
             await expect(
