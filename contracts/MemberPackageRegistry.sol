@@ -34,7 +34,6 @@ contract MemberPackageRegistry is
         uint256 startTime;
         uint256 endTime;
         uint256 duration;
-        uint8 rank;
     }
 
     struct MemberPackageSubscription {
@@ -55,10 +54,6 @@ contract MemberPackageRegistry is
     mapping(address => mapping(uint256 => uint256))
         public creatorPackageExpirationTime;
 
-    // mapping artist address to creator pack to expirations time
-    mapping(address => EnumerableSetUpgradeable.UintSet)
-        private creatorSubscribedPackage;
-
     // mapping index to user package
     mapping(uint256 => MemberPackage) private userPackages;
 
@@ -71,9 +66,6 @@ contract MemberPackageRegistry is
     // mapping user address to user pack to expirations time
     mapping(address => mapping(uint256 => uint256))
         public userPackageExpirationTime;
-
-    mapping(address => EnumerableSetUpgradeable.UintSet)
-        private userSubscribedPackage;
 
     /* ========== EVENTS ========== */
     event FeeToAddressChanged(address oldAddress, address newAddress);
@@ -237,7 +229,7 @@ contract MemberPackageRegistry is
         return
             _getMemberPackageSubscription(
                 user,
-                creatorSubscribedPackage[user].length(),
+                totalCreatorPackage,
                 creatorPackageExpirationTime
             );
     }
@@ -301,7 +293,7 @@ contract MemberPackageRegistry is
         return
             _getMemberPackageSubscription(
                 user,
-                userSubscribedPackage[user].length(),
+                totalUserPackage,
                 userPackageExpirationTime
             );
     }
@@ -336,13 +328,13 @@ contract MemberPackageRegistry is
 
     function _getMemberPackageSubscription(
         address user,
-        uint256 totalUserPackageLength,
+        uint256 totalPackage,
         mapping(address => mapping(uint256 => uint256))
             storage memberPackageExpirationTime
     ) internal view returns (MemberPackageSubscription[] memory) {
         uint256 length;
-        uint256[] memory packageIds = new uint256[](totalUserPackageLength);
-        for (uint256 i = 0; i < totalUserPackageLength; i++) {
+        uint256[] memory packageIds = new uint256[](totalPackage);
+        for (uint256 i = 0; i < totalPackage; i++) {
             if (memberPackageExpirationTime[user][i] > block.timestamp) {
                 packageIds[length] = i;
                 length++;
@@ -384,7 +376,6 @@ contract MemberPackageRegistry is
         uint256 _startTime,
         uint256 _endTime,
         uint256 _duration,
-        uint8 _rank,
         bool _isActive
     ) external onlyOwner {
         uint256 creatorPackageId = totalCreatorPackage;
@@ -399,8 +390,7 @@ contract MemberPackageRegistry is
             _maxPackageSell,
             _startTime,
             _endTime,
-            _duration,
-            _rank
+            _duration
         );
 
         if (_isActive) activeCreatorPackages.add(creatorPackageId);
@@ -439,8 +429,7 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration,
-        uint8 _rank
+        uint256 _duration
     ) external onlyOwner {
         require(
             _creatorPackageId < totalCreatorPackage,
@@ -457,8 +446,7 @@ contract MemberPackageRegistry is
             _maxPackageSell,
             _startTime,
             _endTime,
-            _duration,
-            _rank
+            _duration
         );
 
         emit CreatorPackageUpdated(
@@ -536,7 +524,6 @@ contract MemberPackageRegistry is
         uint256 _startTime,
         uint256 _endTime,
         uint256 _duration,
-        uint8 _rank,
         bool _isActive
     ) external onlyOwner {
         uint256 userPackageId = totalUserPackage;
@@ -551,8 +538,7 @@ contract MemberPackageRegistry is
             _maxPackageSell,
             _startTime,
             _endTime,
-            _duration,
-            _rank
+            _duration
         );
 
         if (_isActive) activeUserPackages.add(userPackageId);
@@ -590,8 +576,7 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration,
-        uint8 _rank
+        uint256 _duration
     ) external onlyOwner {
         require(
             _userPackageId < totalUserPackage,
@@ -607,8 +592,7 @@ contract MemberPackageRegistry is
             _maxPackageSell,
             _startTime,
             _endTime,
-            _duration,
-            _rank
+            _duration
         );
 
         emit UserPackageUpdated(
@@ -680,7 +664,6 @@ contract MemberPackageRegistry is
         uint256 expirationTime = _subscribeMemberPackage(
             creatorPackageExpirationTime,
             creatorPackages,
-            creatorSubscribedPackage,
             _packageId,
             _quantity
         );
@@ -714,7 +697,6 @@ contract MemberPackageRegistry is
         uint256 expirationTime = _subscribeMemberPackage(
             userPackageExpirationTime,
             userPackages,
-            userSubscribedPackage,
             _packageId,
             _quantity
         );
@@ -740,8 +722,7 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration,
-        uint8 _rank
+        uint256 _duration
     ) internal {
         require(_price > 0, "PackageRegistry: invalid package price");
         require(
@@ -761,8 +742,7 @@ contract MemberPackageRegistry is
             0,
             _startTime,
             _endTime,
-            _duration,
-            _rank
+            _duration
         );
     }
 
@@ -776,8 +756,7 @@ contract MemberPackageRegistry is
         uint256 _maxPackageSell,
         uint256 _startTime,
         uint256 _endTime,
-        uint256 _duration,
-        uint8 _rank
+        uint256 _duration
     ) internal returns (uint256) {
         require(_price > 0, "PackageRegistry: invalid package price");
         require(
@@ -799,7 +778,6 @@ contract MemberPackageRegistry is
         memberPackage.startTime = _startTime;
         memberPackage.endTime = _endTime;
         memberPackage.duration = _duration;
-        memberPackage.rank = _rank;
 
         if (!_activeMemberSet.contains(_memberPackageId)) {
             _activeMemberSet.add(_memberPackageId);
@@ -811,8 +789,6 @@ contract MemberPackageRegistry is
         mapping(address => mapping(uint256 => uint256))
             storage _memberPackageExpirationTime,
         mapping(uint256 => MemberPackage) storage _memberPackages,
-        mapping(address => EnumerableSetUpgradeable.UintSet)
-            storage _subscribedPackages,
         uint256 _memberPackageId,
         uint256 _quantity
     ) internal returns (uint256 expirationTime) {
@@ -836,18 +812,6 @@ contract MemberPackageRegistry is
                 (memberPackage.packageSold + _quantity),
             "PackageRegistry: Package sold out"
         );
-
-        (
-            uint256 leastHigherRank,
-            uint256 leastHigherId
-        ) = _updateSubscribeMemberPackage(
-                _memberPackageExpirationTime,
-                _memberPackages,
-                _subscribedPackages,
-                memberPackage,
-                _quantity
-            );
-
         uint256 _price = memberPackage.price * _quantity;
         if (memberPackage.paymentToken == address(0)) {
             require(msg.value == _price, "PackageRegistry: Not enough price");
@@ -861,85 +825,25 @@ contract MemberPackageRegistry is
             );
         }
 
-        if (leastHigherRank != 0) {
-            uint256 leastExpirationTime = _memberPackageExpirationTime[
-                _msgSender()
-            ][leastHigherId];
+        uint256 oldExpirationTime = _memberPackageExpirationTime[_msgSender()][
+            _memberPackageId
+        ];
 
+        if (oldExpirationTime > block.timestamp) {
             expirationTime =
-                leastExpirationTime +
+                oldExpirationTime +
                 _quantity *
                 memberPackage.duration;
         } else {
-            uint256 oldExpirationTime = _memberPackageExpirationTime[
-                _msgSender()
-            ][_memberPackageId];
-
-            if (oldExpirationTime > block.timestamp) {
-                expirationTime =
-                    oldExpirationTime +
-                    _quantity *
-                    memberPackage.duration;
-            } else {
-                expirationTime =
-                    block.timestamp +
-                    _quantity *
-                    memberPackage.duration;
-            }
+            expirationTime =
+                block.timestamp +
+                _quantity *
+                memberPackage.duration;
         }
-
-        if (!_subscribedPackages[_msgSender()].contains(_memberPackageId)) {
-            _subscribedPackages[_msgSender()].add(_memberPackageId);
-        }
-
         _memberPackageExpirationTime[_msgSender()][
             _memberPackageId
         ] = expirationTime;
         _memberPackages[_memberPackageId].packageSold += _quantity;
-    }
-
-    function _updateSubscribeMemberPackage(
-        mapping(address => mapping(uint256 => uint256))
-            storage _memberPackageExpirationTime,
-        mapping(uint256 => MemberPackage) storage _memberPackages,
-        mapping(address => EnumerableSetUpgradeable.UintSet)
-            storage _subscribedPackages,
-        MemberPackage memory memberPackage,
-        uint256 quantity
-    ) internal returns (uint256 leastHigherRank, uint256 leastHigherId) {
-        uint256[] memory subscribedPackage = _subscribedPackages[_msgSender()]
-            .values();
-
-        for (uint256 i = 0; i < subscribedPackage.length; i++) {
-            uint256 subscribedPackageId = subscribedPackage[i];
-
-            if (
-                _memberPackageExpirationTime[_msgSender()][
-                    subscribedPackageId
-                ] < block.timestamp
-            ) {
-                _subscribedPackages[_msgSender()].remove(subscribedPackageId);
-                continue;
-            }
-
-            MemberPackage memory subscribedMemberPackage = _memberPackages[
-                subscribedPackageId
-            ];
-
-            if (subscribedMemberPackage.rank < memberPackage.rank) {
-                _memberPackageExpirationTime[_msgSender()][
-                    subscribedPackageId
-                ] += memberPackage.duration * quantity;
-            } else if (subscribedMemberPackage.rank > memberPackage.rank) {
-                if (
-                    leastHigherRank == 0 ||
-                    leastHigherRank > subscribedMemberPackage.rank
-                ) {
-                    leastHigherRank = subscribedMemberPackage.rank;
-                    leastHigherId = subscribedMemberPackage.packageId;
-                }
-            }
-        }
     }
 
     function _activeMemberPackage(
