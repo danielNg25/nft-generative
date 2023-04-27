@@ -51,8 +51,8 @@ contract MemberPackageRegistry is
     EnumerableSetUpgradeable.UintSet private activeCreatorPackages;
 
     // mapping artist address to creator pack to expirations time
-    mapping(address => mapping(uint256 => uint256))
-        public creatorPackageExpirationTime;
+    mapping(address => MemberPackageSubscription)
+        public creatorPackageSubscription;
 
     // mapping index to user package
     mapping(uint256 => MemberPackage) private userPackages;
@@ -64,8 +64,8 @@ contract MemberPackageRegistry is
     EnumerableSetUpgradeable.UintSet private activeUserPackages;
 
     // mapping user address to user pack to expirations time
-    mapping(address => mapping(uint256 => uint256))
-        public userPackageExpirationTime;
+    mapping(address => MemberPackageSubscription)
+        public userPackageSubscription;
 
     /* ========== EVENTS ========== */
     event FeeToAddressChanged(address oldAddress, address newAddress);
@@ -225,13 +225,8 @@ contract MemberPackageRegistry is
      */
     function getCreatorPackageSubscription(
         address user
-    ) public view returns (MemberPackageSubscription[] memory) {
-        return
-            _getMemberPackageSubscription(
-                user,
-                totalCreatorPackage,
-                creatorPackageExpirationTime
-            );
+    ) public view returns (MemberPackageSubscription memory) {
+        return creatorPackageSubscription[user];
     }
 
     // User Package View functions
@@ -289,13 +284,8 @@ contract MemberPackageRegistry is
      */
     function getUserPackageSubscription(
         address user
-    ) public view returns (MemberPackageSubscription[] memory) {
-        return
-            _getMemberPackageSubscription(
-                user,
-                totalUserPackage,
-                userPackageExpirationTime
-            );
+    ) public view returns (MemberPackageSubscription memory) {
+        return userPackageSubscription[user];
     }
 
     // Internal view functions
@@ -324,33 +314,6 @@ contract MemberPackageRegistry is
         }
 
         package = memberPackages[packageId];
-    }
-
-    function _getMemberPackageSubscription(
-        address user,
-        uint256 totalPackage,
-        mapping(address => mapping(uint256 => uint256))
-            storage memberPackageExpirationTime
-    ) internal view returns (MemberPackageSubscription[] memory) {
-        uint256 length;
-        uint256[] memory packageIds = new uint256[](totalPackage);
-        for (uint256 i = 0; i < totalPackage; i++) {
-            if (memberPackageExpirationTime[user][i] > block.timestamp) {
-                packageIds[length] = i;
-                length++;
-            }
-        }
-
-        MemberPackageSubscription[]
-            memory packages = new MemberPackageSubscription[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            packages[i] = MemberPackageSubscription(
-                packageIds[i],
-                memberPackageExpirationTime[user][packageIds[i]]
-            );
-        }
-        return packages;
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
@@ -661,12 +624,19 @@ contract MemberPackageRegistry is
             "PackageRegistry: Package deactived"
         );
 
-        uint256 expirationTime = _subscribeMemberPackage(
-            creatorPackageExpirationTime,
+        uint256 duration = _subscribeMemberPackage(
             creatorPackages,
             _packageId,
             _quantity
         );
+
+        uint256 expirationTime = block.timestamp + duration;
+        creatorPackageSubscription[_msgSender()]
+            .expirationTime = expirationTime;
+
+        if (creatorPackageSubscription[_msgSender()].packageId != _packageId) {
+            creatorPackageSubscription[_msgSender()].packageId = _packageId;
+        }
 
         emit CreatorPackSubscribed(
             _msgSender(),
@@ -694,12 +664,29 @@ contract MemberPackageRegistry is
             "PackageRegistry: Package deactived"
         );
 
-        uint256 expirationTime = _subscribeMemberPackage(
-            userPackageExpirationTime,
+        uint256 duration = _subscribeMemberPackage(
             userPackages,
             _packageId,
             _quantity
         );
+
+        MemberPackageSubscription
+            memory oldMemberPackage = userPackageSubscription[_msgSender()];
+
+        uint256 expirationTime = 0;
+
+        if (oldMemberPackage.packageId != _packageId) {
+            userPackageSubscription[_msgSender()].packageId = _packageId;
+            expirationTime = block.timestamp + duration;
+        } else {
+            if (oldMemberPackage.expirationTime > block.timestamp) {
+                expirationTime = oldMemberPackage.expirationTime + duration;
+            } else {
+                expirationTime = block.timestamp + duration;
+            }
+        }
+
+        userPackageSubscription[_msgSender()].expirationTime = expirationTime;
 
         emit UserPackSubscribed(
             _msgSender(),
@@ -786,12 +773,10 @@ contract MemberPackageRegistry is
     }
 
     function _subscribeMemberPackage(
-        mapping(address => mapping(uint256 => uint256))
-            storage _memberPackageExpirationTime,
         mapping(uint256 => MemberPackage) storage _memberPackages,
         uint256 _memberPackageId,
         uint256 _quantity
-    ) internal returns (uint256 expirationTime) {
+    ) internal returns (uint256 duration) {
         MemberPackage memory memberPackage = _memberPackages[_memberPackageId];
         require(
             memberPackage.startTime <= block.timestamp,
@@ -825,25 +810,8 @@ contract MemberPackageRegistry is
             );
         }
 
-        uint256 oldExpirationTime = _memberPackageExpirationTime[_msgSender()][
-            _memberPackageId
-        ];
-
-        if (oldExpirationTime > block.timestamp) {
-            expirationTime =
-                oldExpirationTime +
-                _quantity *
-                memberPackage.duration;
-        } else {
-            expirationTime =
-                block.timestamp +
-                _quantity *
-                memberPackage.duration;
-        }
-        _memberPackageExpirationTime[_msgSender()][
-            _memberPackageId
-        ] = expirationTime;
         _memberPackages[_memberPackageId].packageSold += _quantity;
+        return memberPackage.duration * _quantity;
     }
 
     function _activeMemberPackage(
