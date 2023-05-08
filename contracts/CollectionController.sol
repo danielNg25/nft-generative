@@ -53,6 +53,9 @@ contract CollectionController is
     // mapping of minted layer id hash
     mapping(bytes => bool) private layerHashes;
 
+    // mapping of minted layer id hash to owner
+    mapping(bytes => address) private layerHashMinters;
+
     // mapping used signature
     mapping(bytes => bool) private invalidSignatures;
 
@@ -283,6 +286,7 @@ contract CollectionController is
 
         nft.mint(_msgSender(), uri);
         layerHashes[layerHash] = true;
+        layerHashMinters[layerHash] = _msgSender();
         invalidSignatures[signature] = true;
         emit NFTMinted(
             collectionId,
@@ -337,8 +341,8 @@ contract CollectionController is
     /**
      * @dev check if layer combination is minted
      */
-    function isLayerMinted(bytes memory layerHash) public view returns (bool) {
-        return layerHashes[layerHash];
+    function isLayerMinted(bytes memory layerHash) public view returns (bool, address) {
+        return (layerHashes[layerHash], layerHashMinters[layerHash]);
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
