@@ -306,9 +306,11 @@ describe('CollectionController', () => {
                     FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT),
                 ]
             );
-
-            expect(await collectionController.isLayerMinted('0xabc123')).to.be
-                .true;
+            
+            const [isMinted, minter] = await collectionController.isLayerMinted('0xabc123');
+            expect(isMinted).to.be.true;
+            expect(minter).to.equal(user1.address);
+            
             const collection = await collectionController.collections(1);
             const NFTFactory: NFT__factory = <NFT__factory>(
                 await ethers.getContractFactory('NFT')

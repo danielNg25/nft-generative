@@ -45,6 +45,7 @@ const config: HardhatUserConfig = {
             bscTestnet: `${process.env.BSCSCAN_KEY}`,
             goerli: `${process.env.ETHERSCAN_KEY}`,
             polygonMumbai: `${process.env.POLYGONSCAN_KEY}`,
+            sepolia: `${process.env.ETHERSCAN_KEY}`,
         },
     },
     solidity: {
