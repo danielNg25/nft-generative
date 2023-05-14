@@ -9,7 +9,6 @@ import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeab
 import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
 import "./token/NFT.sol";
 
 /**
@@ -28,11 +27,13 @@ contract CollectionController is
 
     address public feeTo;
 
+    address public upgradeFeeToken;
+    uint256 public upgradeFee; 
+
     address public verifier;
 
     uint256 public totalCollection;
 
-    address public royaltyFeeTo;
     uint256 public royaltyFee;
 
     uint256 public constant BASIS_POINT = 10000;
@@ -45,6 +46,7 @@ contract CollectionController is
         uint256 mintCap;
         uint256 startTime;
         uint256 endTime;
+        bool upgradeable;
     }
 
     // mapping index to collection
@@ -67,6 +69,7 @@ contract CollectionController is
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
+    event upgradeFeeTokenAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
 
@@ -79,7 +82,8 @@ contract CollectionController is
         address artist,
         address collectionAddress,
         address paymentToken,
-        uint256 mintCap
+        uint256 mintCap,
+        bool upgradeable
     );
     event MintCapUpdated(
         uint256 indexed collectionId,
@@ -104,6 +108,13 @@ contract CollectionController is
         uint256 tokenId,
         uint256 royaltyFee
     );
+    event UpgradeFeeTransferred(
+            uint256 keyId,
+            uint256 indexed collectionId,
+            address artist,
+            address collectionAddress,
+            uint256 upgradeFee
+    );
 
     /* ========== MODIFIERS ========== */
 
@@ -114,21 +125,24 @@ contract CollectionController is
      * must call right after contract is deployed
      * @param _feeTo address to receive revenue
      * @param _verifier address to verify signature
-     * @param _royaltyFeeTo address to receive royalty fee
      * @param _royaltyFee percent of royalty fee received in basis point of 10000
+     * @param _upgradeFee fee to create upgradeable collection
+     * @param _upgradeFeeToken address to receive upgrade fee
      */
     function initialize(
         address _feeTo,
         address _verifier,
-        address _royaltyFeeTo,
-        uint256 _royaltyFee
+        uint256 _royaltyFee,
+        uint256 _upgradeFee,
+        address _upgradeFeeToken
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
         feeTo = _feeTo;
         verifier = _verifier;
-        royaltyFeeTo = _royaltyFeeTo;
         royaltyFee = _royaltyFee;
+        upgradeFee = _upgradeFee;
+        upgradeFeeToken = _upgradeFeeToken; 
     }
 
     /**
@@ -151,8 +165,9 @@ contract CollectionController is
         uint256 startTime,
         uint256 endTime,
         uint256 signatureExpTime,
+        bool upgradeable,
         bytes memory signature
-    ) external {
+    ) external payable nonReentrant {
         require(
             invalidSignatures[signature] == false &&
                 verifyCollectionCreationMessage(
@@ -166,6 +181,7 @@ contract CollectionController is
                     startTime,
                     endTime,
                     signatureExpTime,
+                    upgradeable,
                     signature
                 ),
             "CollectionController: invalid signature"
@@ -180,30 +196,54 @@ contract CollectionController is
             endTime > startTime && endTime > block.timestamp || endTime == 0,
             "CollectionController: invalid end time"
         );
+        if(upgradeable) {
+            if (upgradeFeeToken == address(0)) {
+                require(msg.value == upgradeFee, "CollectionController: wrong fee");
+                payable(feeTo).sendValue(upgradeFee);
+            } else {
+                IERC20Upgradeable(upgradeFeeToken).safeTransferFrom(
+                    _msgSender(),
+                    feeTo,
+                    upgradeFee
+                );
+            }
+        }
+
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
-        totalCollection++;
-        collections[totalCollection] = Collection(
+        uint256 collectionId = ++totalCollection;
+        collections[collectionId] = Collection(
             keyId,
             _msgSender(),
             collectionAddress,
             paymentToken,
             mintCap,
             startTime,
-            endTime
+            endTime,
+            upgradeable
         );
-        artistToCollection[_msgSender()].add(totalCollection);
+        artistToCollection[_msgSender()].add(collectionId);
         invalidSignatures[signature] = true;
+
+        emit UpgradeFeeTransferred(
+            keyId,
+            collectionId,
+            _msgSender(),
+            collectionAddress,
+            upgradeFee
+        );
+
         emit CollectionCreated(
             keyId,
-            totalCollection,
+            collectionId,
             name,
             symbol,
             baseUri,
             _msgSender(),
             collectionAddress,
             paymentToken,
-            mintCap
+            mintCap,
+            upgradeable
         );
     }
 
@@ -264,17 +304,17 @@ contract CollectionController is
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
 
-            payable(feeTo).sendValue(fee - royaltyFeeAmount);
-            payable(royaltyFeeTo).sendValue(royaltyFeeAmount);
+            payable(collection.artist).sendValue(fee - royaltyFeeAmount);
+            payable(feeTo).sendValue(royaltyFeeAmount);
         } else {
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
-                feeTo,
+                collection.artist,
                 fee - royaltyFeeAmount
             );
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
-                royaltyFeeTo,
+                feeTo,
                 royaltyFeeAmount
             );
         }
@@ -453,24 +493,6 @@ contract CollectionController is
     }
 
     /**
-     * @dev function to set royaltyFeeTo address
-     * @param _royaltyFeeTo new royaltyFeeTo address
-     */
-    function setRoyaltyFeeTo(address _royaltyFeeTo) external onlyOwner {
-        address oldFeeTo = royaltyFeeTo;
-        require(
-            _royaltyFeeTo != address(0),
-            "CollectionController: set to zero address"
-        );
-        require(
-            _royaltyFeeTo != oldFeeTo,
-            "CollectionController: royaltyFeeTo address set"
-        );
-        royaltyFeeTo = _royaltyFeeTo;
-        emit RoyaltyFeeToAddressChanged(oldFeeTo, _royaltyFeeTo);
-    }
-
-    /**
      * @dev function to set royaltyFee address
      * @param _royaltyFee new royaltyFee percent
      */
@@ -485,6 +507,20 @@ contract CollectionController is
         emit RoyaltyFeeChanged(oldFee, _royaltyFee);
     }
 
+    /**
+     * @dev function to set upgradeFeeToken address
+     * @param _upgradeFeeToken new upgradeFeeToken address
+     */
+    function setUpgradeFeeToken(address _upgradeFeeToken) external onlyOwner {
+        address oldUpgradeFeeToken = upgradeFeeToken;
+        require(
+            _upgradeFeeToken != oldUpgradeFeeToken,
+            "CollectionController: upgradeFeeToken address set"
+        );
+        upgradeFeeToken = _upgradeFeeToken;
+        emit upgradeFeeTokenAddressChanged(oldUpgradeFeeToken, _upgradeFeeToken);
+    }
+    
     /**
      * @dev function to set feeTo address
      * @param _verifier new feeTo address
@@ -564,6 +600,7 @@ contract CollectionController is
         uint256 startTime,
         uint256 endTime,
         uint256 signatureExpTime,
+        bool upgradeable,
         bytes memory signature
     ) private view returns (bool) {
         bytes32 dataHash = encodeCollectionCreationData(
@@ -576,7 +613,8 @@ contract CollectionController is
             mintCap,
             startTime,
             endTime,
-            signatureExpTime
+            signatureExpTime,
+            upgradeable
         );
         bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
         address recovered = ECDSA.recover(signHash, signature);
@@ -593,7 +631,8 @@ contract CollectionController is
         uint256 mintCap,
         uint256 startTime,
         uint256 endTime,
-        uint256 signatureExpTime
+        uint256 signatureExpTime,
+        bool upgradeable
     ) private view returns (bytes32) {
         uint256 id;
         assembly {
@@ -612,7 +651,8 @@ contract CollectionController is
                     mintCap,
                     startTime,
                     endTime,
-                    signatureExpTime
+                    signatureExpTime,
+                    upgradeable
                 )
             );
     }
