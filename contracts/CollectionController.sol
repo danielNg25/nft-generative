@@ -28,7 +28,7 @@ contract CollectionController is
     address public feeTo;
 
     address public upgradeFeeToken;
-    uint256 public upgradeFee; 
+    uint256 public upgradeFee;
 
     address public verifier;
 
@@ -69,7 +69,7 @@ contract CollectionController is
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
-    event upgradeFeeTokenAddressChanged(address oldAddress, address newAddress);
+    event UpgradeFeeTokenAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
 
@@ -109,11 +109,10 @@ contract CollectionController is
         uint256 royaltyFee
     );
     event UpgradeFeeTransferred(
-            uint256 keyId,
-            uint256 indexed collectionId,
-            address artist,
-            address collectionAddress,
-            uint256 upgradeFee
+        uint256 keyId,
+        uint256 indexed collectionId,
+        address artist,
+        uint256 upgradeFee
     );
 
     /* ========== MODIFIERS ========== */
@@ -142,7 +141,7 @@ contract CollectionController is
         verifier = _verifier;
         royaltyFee = _royaltyFee;
         upgradeFee = _upgradeFee;
-        upgradeFeeToken = _upgradeFeeToken; 
+        upgradeFeeToken = _upgradeFeeToken;
     }
 
     /**
@@ -196,9 +195,13 @@ contract CollectionController is
             endTime > startTime && endTime > block.timestamp || endTime == 0,
             "CollectionController: invalid end time"
         );
-        if(upgradeable) {
+
+        if (upgradeable) {
             if (upgradeFeeToken == address(0)) {
-                require(msg.value == upgradeFee, "CollectionController: wrong fee");
+                require(
+                    msg.value == upgradeFee,
+                    "CollectionController: wrong fee"
+                );
                 payable(feeTo).sendValue(upgradeFee);
             } else {
                 IERC20Upgradeable(upgradeFeeToken).safeTransferFrom(
@@ -207,6 +210,13 @@ contract CollectionController is
                     upgradeFee
                 );
             }
+
+            emit UpgradeFeeTransferred(
+                keyId,
+                totalCollection + 1,
+                _msgSender(),
+                upgradeFee
+            );
         }
 
         NFT newNFT = new NFT(name, symbol, baseUri);
@@ -224,14 +234,6 @@ contract CollectionController is
         );
         artistToCollection[_msgSender()].add(collectionId);
         invalidSignatures[signature] = true;
-
-        emit UpgradeFeeTransferred(
-            keyId,
-            collectionId,
-            _msgSender(),
-            collectionAddress,
-            upgradeFee
-        );
 
         emit CollectionCreated(
             keyId,
@@ -381,7 +383,9 @@ contract CollectionController is
     /**
      * @dev check if layer combination is minted
      */
-    function isLayerMinted(bytes memory layerHash) public view returns (bool, address) {
+    function isLayerMinted(
+        bytes memory layerHash
+    ) public view returns (bool, address) {
         return (layerHashes[layerHash], layerHashMinters[layerHash]);
     }
 
@@ -518,9 +522,12 @@ contract CollectionController is
             "CollectionController: upgradeFeeToken address set"
         );
         upgradeFeeToken = _upgradeFeeToken;
-        emit upgradeFeeTokenAddressChanged(oldUpgradeFeeToken, _upgradeFeeToken);
+        emit UpgradeFeeTokenAddressChanged(
+            oldUpgradeFeeToken,
+            _upgradeFeeToken
+        );
     }
-    
+
     /**
      * @dev function to set feeTo address
      * @param _verifier new feeTo address
