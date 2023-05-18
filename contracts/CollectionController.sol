@@ -62,7 +62,7 @@ contract CollectionController is
     mapping(bytes => bool) private invalidSignatures;
 
     // mapping (tokenId, collectionId) of minted NFT to layerHash
-    mapping(bytes32 => bytes) private mintedNFTs;
+    mapping(bytes32 => bytes) private nftLayerHashes;
 
     // mapping owner address to own collections set
     mapping(address => EnumerableSetUpgradeable.UintSet)
@@ -338,8 +338,11 @@ contract CollectionController is
         );
 
         nft.mint(_msgSender(), uri);
-        bytes32 hashNFT = keccak256(abi.encodePacked(tokenId, collectionId));
-        mintedNFTs[hashNFT] = layerHash;
+        bytes32 hashNft = hashNFT(
+            tokenId,
+            collectionId
+        );
+        nftLayerHashes[hashNft] = layerHash;
         
         layerHashes[layerHash] = true;
         layerHashMinters[layerHash] = _msgSender();
@@ -374,6 +377,11 @@ contract CollectionController is
      * @dev function for user to upgrade NFT
      * @param  collectionId of collection
      * @param tokenId of token
+     * @param newLayerHash new layer hash of NFT
+     * @param uri new uri of NFT
+     * @param fee fee for upgrading
+     * @param signatureExpTime expiration time of signature
+     * @param signature signature of verifier
      * Emits {NFTUpgraded} events indicating upgraded NFT
      */
     function upgradeNFT(
@@ -449,8 +457,8 @@ contract CollectionController is
         invalidSignatures[signature] = true;
 
         bytes32 hashOldNFT = keccak256(abi.encodePacked(tokenId, collectionId));
-        layerHashMinters[mintedNFTs[hashOldNFT]] = verifier;
-        mintedNFTs[hashOldNFT] = newLayerHash;
+        layerHashMinters[nftLayerHashes[hashOldNFT]] = verifier;
+        nftLayerHashes[hashOldNFT] = newLayerHash;
         emit NFTUpgraded(
             collectionId,
             collection.collectionAddress,
@@ -511,14 +519,27 @@ contract CollectionController is
     }
 
     /**
+     * 
+     * @param tokenId of token
+     * @param collectionId of collection contain token
+     */
+    function hashNFT(
+        uint256 tokenId,
+        uint256 collectionId
+    ) internal pure returns (bytes32) {
+        bytes32 hashNft = keccak256(abi.encodePacked(tokenId, collectionId));
+        return hashNft;
+    }
+
+    /**
      * @dev check layer hash of minted NFT through tokenId and collectionId
      */
     function getLayerHash(
         uint256 tokenId,
         uint256 collectionId
     ) public view returns (bytes memory) {
-        bytes32 hashNFT = keccak256(abi.encodePacked(tokenId, collectionId));
-        return mintedNFTs[hashNFT];
+        bytes32 hashNft = hashNFT(tokenId, collectionId);
+        return nftLayerHashes[hashNft];
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
