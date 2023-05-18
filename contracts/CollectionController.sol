@@ -9,7 +9,6 @@ import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeab
 import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
 import "./token/NFT.sol";
 
 /**
@@ -28,11 +27,13 @@ contract CollectionController is
 
     address public feeTo;
 
+    address public upgradeFeeToken;
+    uint256 public upgradeFee;
+
     address public verifier;
 
     uint256 public totalCollection;
 
-    address public royaltyFeeTo;
     uint256 public royaltyFee;
 
     uint256 public constant BASIS_POINT = 10000;
@@ -45,6 +46,7 @@ contract CollectionController is
         uint256 mintCap;
         uint256 startTime;
         uint256 endTime;
+        bool upgradeable;
     }
 
     // mapping index to collection
@@ -59,6 +61,9 @@ contract CollectionController is
     // mapping used signature
     mapping(bytes => bool) private invalidSignatures;
 
+    // mapping (tokenId, collectionId) of minted NFT to layerHash
+    mapping(bytes32 => bytes) private nftLayerHashes;
+
     // mapping owner address to own collections set
     mapping(address => EnumerableSetUpgradeable.UintSet)
         private artistToCollection;
@@ -67,6 +72,7 @@ contract CollectionController is
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
+    event UpgradeFeeTokenAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
 
@@ -79,7 +85,8 @@ contract CollectionController is
         address artist,
         address collectionAddress,
         address paymentToken,
-        uint256 mintCap
+        uint256 mintCap,
+        bool upgradeable
     );
     event MintCapUpdated(
         uint256 indexed collectionId,
@@ -104,6 +111,20 @@ contract CollectionController is
         uint256 tokenId,
         uint256 royaltyFee
     );
+    event NFTUpgraded(
+        uint256 indexed collectionId,
+        address collectionAddress,
+        address receiver,
+        string uri,
+        uint256 tokenId,
+        uint256 royaltyFee
+    );
+    event UpgradeFeeTransferred(
+        uint256 keyId,
+        uint256 indexed collectionId,
+        address artist,
+        uint256 upgradeFee
+    );
 
     /* ========== MODIFIERS ========== */
 
@@ -114,21 +135,24 @@ contract CollectionController is
      * must call right after contract is deployed
      * @param _feeTo address to receive revenue
      * @param _verifier address to verify signature
-     * @param _royaltyFeeTo address to receive royalty fee
      * @param _royaltyFee percent of royalty fee received in basis point of 10000
+     * @param _upgradeFee fee to create upgradeable collection
+     * @param _upgradeFeeToken address to receive upgrade fee
      */
     function initialize(
         address _feeTo,
         address _verifier,
-        address _royaltyFeeTo,
-        uint256 _royaltyFee
+        uint256 _royaltyFee,
+        uint256 _upgradeFee,
+        address _upgradeFeeToken
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
         feeTo = _feeTo;
         verifier = _verifier;
-        royaltyFeeTo = _royaltyFeeTo;
         royaltyFee = _royaltyFee;
+        upgradeFee = _upgradeFee;
+        upgradeFeeToken = _upgradeFeeToken;
     }
 
     /**
@@ -151,8 +175,9 @@ contract CollectionController is
         uint256 startTime,
         uint256 endTime,
         uint256 signatureExpTime,
+        bool upgradeable,
         bytes memory signature
-    ) external {
+    ) external payable nonReentrant {
         require(
             invalidSignatures[signature] == false &&
                 verifyCollectionCreationMessage(
@@ -166,6 +191,7 @@ contract CollectionController is
                     startTime,
                     endTime,
                     signatureExpTime,
+                    upgradeable,
                     signature
                 ),
             "CollectionController: invalid signature"
@@ -177,33 +203,60 @@ contract CollectionController is
         );
 
         require(
-            endTime > startTime && endTime > block.timestamp || endTime == 0,
+            (endTime > startTime && endTime > block.timestamp) || endTime == 0,
             "CollectionController: invalid end time"
         );
+
+        if (upgradeable) {
+            if (upgradeFeeToken == address(0)) {
+                require(
+                    msg.value == upgradeFee,
+                    "CollectionController: wrong fee"
+                );
+                payable(feeTo).sendValue(upgradeFee);
+            } else {
+                IERC20Upgradeable(upgradeFeeToken).safeTransferFrom(
+                    _msgSender(),
+                    feeTo,
+                    upgradeFee
+                );
+            }
+
+            emit UpgradeFeeTransferred(
+                keyId,
+                totalCollection + 1,
+                _msgSender(),
+                upgradeFee
+            );
+        }
+
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
-        totalCollection++;
-        collections[totalCollection] = Collection(
+        uint256 collectionId = ++totalCollection;
+        collections[collectionId] = Collection(
             keyId,
             _msgSender(),
             collectionAddress,
             paymentToken,
             mintCap,
             startTime,
-            endTime
+            endTime,
+            upgradeable
         );
-        artistToCollection[_msgSender()].add(totalCollection);
+        artistToCollection[_msgSender()].add(collectionId);
         invalidSignatures[signature] = true;
+
         emit CollectionCreated(
             keyId,
-            totalCollection,
+            collectionId,
             name,
             symbol,
             baseUri,
             _msgSender(),
             collectionAddress,
             paymentToken,
-            mintCap
+            mintCap,
+            upgradeable
         );
     }
 
@@ -264,17 +317,17 @@ contract CollectionController is
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
 
-            payable(feeTo).sendValue(fee - royaltyFeeAmount);
-            payable(royaltyFeeTo).sendValue(royaltyFeeAmount);
+            payable(collection.artist).sendValue(fee - royaltyFeeAmount);
+            payable(feeTo).sendValue(royaltyFeeAmount);
         } else {
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
-                feeTo,
+                collection.artist,
                 fee - royaltyFeeAmount
             );
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
-                royaltyFeeTo,
+                feeTo,
                 royaltyFeeAmount
             );
         }
@@ -285,10 +338,128 @@ contract CollectionController is
         );
 
         nft.mint(_msgSender(), uri);
+        bytes32 hashNft = hashNFT(
+            tokenId,
+            collectionId
+        );
+        nftLayerHashes[hashNft] = layerHash;
+        
         layerHashes[layerHash] = true;
         layerHashMinters[layerHash] = _msgSender();
         invalidSignatures[signature] = true;
         emit NFTMinted(
+            collectionId,
+            collection.collectionAddress,
+            _msgSender(),
+            uri,
+            tokenId,
+            royaltyFeeAmount
+        );
+    }
+
+    /**
+     * @dev function to mint NFT from a collection, call by internal caller
+     * @param uri uris of minted NFT
+     * @param receiver address of receiver
+     * @param collectionId of collection
+     */
+    function mint(
+        address receiver,
+        string memory uri,
+        uint256 collectionId
+    ) internal {
+        Collection memory collection = collections[collectionId];
+        NFT nft = NFT(collection.collectionAddress);
+        nft.mint(receiver, uri);
+    }
+
+    /**
+     * @dev function for user to upgrade NFT
+     * @param  collectionId of collection
+     * @param tokenId of token
+     * @param newLayerHash new layer hash of NFT
+     * @param uri new uri of NFT
+     * @param fee fee for upgrading
+     * @param signatureExpTime expiration time of signature
+     * @param signature signature of verifier
+     * Emits {NFTUpgraded} events indicating upgraded NFT
+     */
+    function upgradeNFT(
+        uint256 collectionId,
+        uint256 tokenId,
+        bytes memory newLayerHash,
+        string memory uri,
+        uint256 fee,
+        uint256 signatureExpTime,
+        bytes memory signature
+    ) external payable nonReentrant {
+        require(
+            invalidSignatures[signature] == false &&
+                verifyUpgradeNFTMessage(
+                    collectionId,
+                    tokenId,
+                    _msgSender(),
+                    fee,
+                    uri,
+                    newLayerHash,
+                    signatureExpTime,
+                    signature
+                ),
+            "CollectionController: invalid signature"
+        );
+
+        require(
+            signatureExpTime > block.timestamp,
+            "CollectionController: signature expired"
+        );
+
+        require(
+            !layerHashes[newLayerHash],
+            "CollectionController: Layer combination already minted"
+        );
+
+        require(
+            collections[collectionId].upgradeable,
+            "CollectionController: non-upgradeable collection"
+        );
+
+        Collection memory collection = collections[collectionId];
+
+        require(
+            collection.endTime > block.timestamp || collection.endTime == 0,
+            "CollectionController: collection ended"
+        );
+
+        uint256 royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
+        if (collection.paymentToken == address(0)) {
+            require(msg.value == fee, "CollectionController: wrong fee");
+
+            payable(collection.artist).sendValue(fee - royaltyFeeAmount);
+            payable(feeTo).sendValue(royaltyFeeAmount);
+        } else {
+            IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
+                _msgSender(),
+                collection.artist,
+                fee - royaltyFeeAmount
+            );
+            IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
+                _msgSender(),
+                feeTo,
+                royaltyFeeAmount
+            );
+        }
+
+        NFT nft = NFT(collection.collectionAddress);
+        nft.setTokenURI(tokenId, uri);
+
+        layerHashes[newLayerHash] = true;
+        layerHashMinters[newLayerHash] = _msgSender();
+        invalidSignatures[signature] = true;
+
+        bytes32 hashOldNFT = keccak256(abi.encodePacked(tokenId, collectionId));
+        layerHashMinters[nftLayerHashes[hashOldNFT]] = verifier;
+        nftLayerHashes[hashOldNFT] = newLayerHash;
+        emit NFTUpgraded(
             collectionId,
             collection.collectionAddress,
             _msgSender(),
@@ -341,8 +512,34 @@ contract CollectionController is
     /**
      * @dev check if layer combination is minted
      */
-    function isLayerMinted(bytes memory layerHash) public view returns (bool, address) {
+    function isLayerMinted(
+        bytes memory layerHash
+    ) public view returns (bool, address) {
         return (layerHashes[layerHash], layerHashMinters[layerHash]);
+    }
+
+    /**
+     * 
+     * @param tokenId of token
+     * @param collectionId of collection contain token
+     */
+    function hashNFT(
+        uint256 tokenId,
+        uint256 collectionId
+    ) internal pure returns (bytes32) {
+        bytes32 hashNft = keccak256(abi.encodePacked(tokenId, collectionId));
+        return hashNft;
+    }
+
+    /**
+     * @dev check layer hash of minted NFT through tokenId and collectionId
+     */
+    function getLayerHash(
+        uint256 tokenId,
+        uint256 collectionId
+    ) public view returns (bytes memory) {
+        bytes32 hashNft = hashNFT(tokenId, collectionId);
+        return nftLayerHashes[hashNft];
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
@@ -453,24 +650,6 @@ contract CollectionController is
     }
 
     /**
-     * @dev function to set royaltyFeeTo address
-     * @param _royaltyFeeTo new royaltyFeeTo address
-     */
-    function setRoyaltyFeeTo(address _royaltyFeeTo) external onlyOwner {
-        address oldFeeTo = royaltyFeeTo;
-        require(
-            _royaltyFeeTo != address(0),
-            "CollectionController: set to zero address"
-        );
-        require(
-            _royaltyFeeTo != oldFeeTo,
-            "CollectionController: royaltyFeeTo address set"
-        );
-        royaltyFeeTo = _royaltyFeeTo;
-        emit RoyaltyFeeToAddressChanged(oldFeeTo, _royaltyFeeTo);
-    }
-
-    /**
      * @dev function to set royaltyFee address
      * @param _royaltyFee new royaltyFee percent
      */
@@ -483,6 +662,23 @@ contract CollectionController is
         require(_royaltyFee != oldFee, "CollectionController: royaltyFee set");
         royaltyFee = _royaltyFee;
         emit RoyaltyFeeChanged(oldFee, _royaltyFee);
+    }
+
+    /**
+     * @dev function to set upgradeFeeToken address
+     * @param _upgradeFeeToken new upgradeFeeToken address
+     */
+    function setUpgradeFeeToken(address _upgradeFeeToken) external onlyOwner {
+        address oldUpgradeFeeToken = upgradeFeeToken;
+        require(
+            _upgradeFeeToken != oldUpgradeFeeToken,
+            "CollectionController: upgradeFeeToken address set"
+        );
+        upgradeFeeToken = _upgradeFeeToken;
+        emit UpgradeFeeTokenAddressChanged(
+            oldUpgradeFeeToken,
+            _upgradeFeeToken
+        );
     }
 
     /**
@@ -553,6 +749,58 @@ contract CollectionController is
             );
     }
 
+    function verifyUpgradeNFTMessage(
+        uint256 collectionID,
+        uint256 tokenId,
+        address sender,
+        uint256 fee,
+        string memory uri,
+        bytes memory newLayerHash,
+        uint256 signatureExpTime,
+        bytes memory signature
+    ) private view returns (bool) {
+        bytes32 dataHash = encodeUpgradeNFTData(
+            collectionID,
+            tokenId,
+            sender,
+            fee,
+            uri,
+            newLayerHash,
+            signatureExpTime
+        );
+        bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
+        address recovered = ECDSA.recover(signHash, signature);
+        return recovered == verifier;
+    }
+
+    function encodeUpgradeNFTData(
+        uint256 collectionID,
+        uint256 tokenId,
+        address sender,
+        uint256 fee,
+        string memory uri,
+        bytes memory layerHash,
+        uint256 signatureExpTime
+    ) private view returns (bytes32) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+        return
+            keccak256(
+                abi.encode(
+                    id,
+                    collectionID,
+                    tokenId,
+                    sender,
+                    fee,
+                    uri,
+                    layerHash,
+                    signatureExpTime
+                )
+            );
+    }
+
     function verifyCollectionCreationMessage(
         uint256 keyId,
         address sender,
@@ -564,6 +812,7 @@ contract CollectionController is
         uint256 startTime,
         uint256 endTime,
         uint256 signatureExpTime,
+        bool upgradeable,
         bytes memory signature
     ) private view returns (bool) {
         bytes32 dataHash = encodeCollectionCreationData(
@@ -576,7 +825,8 @@ contract CollectionController is
             mintCap,
             startTime,
             endTime,
-            signatureExpTime
+            signatureExpTime,
+            upgradeable
         );
         bytes32 signHash = ECDSA.toEthSignedMessageHash(dataHash);
         address recovered = ECDSA.recover(signHash, signature);
@@ -593,7 +843,8 @@ contract CollectionController is
         uint256 mintCap,
         uint256 startTime,
         uint256 endTime,
-        uint256 signatureExpTime
+        uint256 signatureExpTime,
+        bool upgradeable
     ) private view returns (bytes32) {
         uint256 id;
         assembly {
@@ -612,7 +863,8 @@ contract CollectionController is
                     mintCap,
                     startTime,
                     endTime,
-                    signatureExpTime
+                    signatureExpTime,
+                    upgradeable
                 )
             );
     }

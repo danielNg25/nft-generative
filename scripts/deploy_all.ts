@@ -39,8 +39,9 @@ async function main() {
         await upgrades.deployProxy(CollectionController, [
             admin,
             admin,
-            admin,
             1000,
+            1,
+            "0x0000000000000000000000000000000000000000"
         ])
     );
     await controller.deployed();
