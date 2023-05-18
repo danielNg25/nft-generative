@@ -18,8 +18,8 @@ describe('CollectionController', () => {
     const PERCENT_BASIS_POINT = BigNumber.from('10000');
     const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
     const VERIFIER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
-    const ROYALTY_FEE = BigNumber.from(1000); 
-    const UPGRADE_FEE = parseEther('0.1'); 
+    const ROYALTY_FEE = BigNumber.from(1000);
+    const UPGRADE_FEE = parseEther('0.1');
     const PREMIUM_PACKAGE_PRICE = parseEther('0.001');
 
     let owner: SignerWithAddress;
@@ -28,6 +28,8 @@ describe('CollectionController', () => {
     let feeTo: SignerWithAddress;
     let collectionController: CollectionController;
     let mockToken: ERC20Token;
+
+    let NFTFactory: NFT__factory;
 
     beforeEach(async () => {
         const accounts: SignerWithAddress[] = await ethers.getSigners();
@@ -38,7 +40,7 @@ describe('CollectionController', () => {
         const MockTokenFactory: ERC20Token__factory = <ERC20Token__factory>(
             await ethers.getContractFactory('ERC20Token')
         );
-        const NFTFactory: NFT__factory = <NFT__factory>(
+        NFTFactory = <NFT__factory>(
             await ethers.getContractFactory('NFT')
         );
         const ControllerFactory: CollectionController__factory = <
@@ -75,6 +77,9 @@ describe('CollectionController', () => {
                 VERIFIER_ADDRESS
             );
             expect(await collectionController.feeTo()).to.equal(feeTo.address);
+            describe('CollectionController', () => {
+
+            })
         });
     });
 
@@ -110,7 +115,7 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     true,
                     signatureCollection,
-                    {value: UPGRADE_FEE}
+                    { value: UPGRADE_FEE }
                 );
             const totalCollection =
                 await collectionController.totalCollection();
@@ -123,7 +128,7 @@ describe('CollectionController', () => {
             expect(collection.startTime).to.equal(timestamp + 86400);
             expect(collection.endTime).to.equal(timestamp + 86400 * 2);
             expect(collection.upgradeable).to.equal(true);
-            
+
 
             await expect(tx).to.changeEtherBalances(
                 [user1, feeTo],
@@ -164,7 +169,7 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     true,
                     signatureCollection,
-                    {value: UPGRADE_FEE}
+                    { value: UPGRADE_FEE }
                 );
 
             const totalCollection =
@@ -210,7 +215,7 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     false,
                     signatureCollection,
-                    {value: UPGRADE_FEE}
+                    { value: UPGRADE_FEE }
                 );
 
             const totalCollection =
@@ -253,7 +258,7 @@ describe('CollectionController', () => {
                 1000,
                 timestamp + 86400,
                 timestamp + 86400 * 2,
-                timestamp + 86400,
+                timestamp + 86400 * 3,
                 false
             );
             await collectionController
@@ -267,7 +272,7 @@ describe('CollectionController', () => {
                     1000,
                     timestamp + 86400,
                     timestamp + 86400 * 2,
-                    timestamp + 86400,
+                    timestamp + 86400 * 3,
                     false,
                     signatureCollection,
                 );
@@ -375,9 +380,7 @@ describe('CollectionController', () => {
             expect(minter).to.equal(user1.address);
 
             const collection = await collectionController.collections(1);
-            const NFTFactory: NFT__factory = <NFT__factory>(
-                await ethers.getContractFactory('NFT')
-            );
+
             const nFT = NFTFactory.attach(collection.collectionAddress);
             expect(await nFT.ownerOf(1)).to.equal(user1.address);
 
@@ -499,6 +502,299 @@ describe('CollectionController', () => {
         });
     });
 
+    describe('Upgrade NFT', () => {
+        const FEE = parseEther('0.1');
+        let SIGNATUREFIRST: string;
+        let SIGNATURESECOND: string;
+        let SIGNATUREUPGRADENFT: string;
+        let signatureExpTime: number;
+        let timestamp: number;
+        beforeEach(async () => {
+            timestamp = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+            signatureExpTime = timestamp + 86400;
+            SIGNATUREFIRST = await signatureData(
+                1,
+                user1.address,
+                FEE,
+                'First',
+                '0xabc123',
+                signatureExpTime
+            );
+            SIGNATURESECOND = await signatureData(
+                1,
+                user1.address,
+                FEE,
+                'Second',
+                '0xabc124',
+                signatureExpTime
+            );
+            SIGNATUREUPGRADENFT = await signatureUpgradeNFTData(
+                1,
+                1,
+                user1.address,
+                FEE,
+                '',
+                '0xabc125',
+                signatureExpTime + 86400
+            );
+            let signatureCollection = signatureCollectionData(
+                1,
+                owner.address,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp,
+                timestamp + 86400,
+                timestamp + 86400 * 2,
+                true
+            );
+
+            await collectionController
+                .connect(owner)
+                .createCollection(
+                    1,
+                    'Var NFT Collection',
+                    'VAR',
+                    '',
+                    ADDRESS_ZERO,
+                    1000,
+                    timestamp,
+                    timestamp + 86400,
+                    timestamp + 86400 * 2,
+                    true,
+                    signatureCollection,
+                    { value: FEE }
+                );
+
+            await collectionController
+                .connect(user1)
+                .mintNFT(
+                    1,
+                    'First',
+                    FEE,
+                    '0xabc123',
+                    signatureExpTime,
+                    SIGNATUREFIRST,
+                    { value: FEE }
+                );
+
+            await collectionController
+                .connect(user1)
+                .mintNFT(
+                    1,
+                    'Second',
+                    FEE,
+                    '0xabc124',
+                    signatureExpTime,
+                    SIGNATURESECOND,
+                    { value: FEE }
+                );
+        });
+
+        it('Should failed', async () => {
+            let signatureNonUpgradeCollection = signatureCollectionData(
+                2,
+                owner.address,
+                'Var NFT Collection 2',
+                'VAR',
+                '',
+                ADDRESS_ZERO,
+                1000,
+                timestamp,
+                timestamp + 86400 * 2,
+                timestamp + 86400,
+                false
+            );
+            await collectionController
+                .connect(owner)
+                .createCollection(
+                    2,
+                    'Var NFT Collection 2',
+                    'VAR',
+                    '',
+                    ADDRESS_ZERO,
+                    1000,
+                    timestamp,
+                    timestamp + 86400 * 2,
+                    timestamp + 86400,
+                    false,
+                    signatureNonUpgradeCollection,
+                );
+
+            let SIGNATURE = await signatureData(
+                2,
+                user1.address,
+                FEE,
+                'First',
+                '0xabc113',
+                signatureExpTime
+            );
+
+            await collectionController
+                .connect(user1)
+                .mintNFT(
+                    2,
+                    'First',
+                    FEE,
+                    '0xabc113',
+                    signatureExpTime,
+                    SIGNATURE,
+                    { value: FEE }
+                );
+            let SIGNATUREFALSEUPGRADENFT = await signatureUpgradeNFTData(
+                2,
+                1,
+                user1.address,
+                FEE,
+                'Kaka',
+                '0xabc112',
+                signatureExpTime
+            );
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        2,
+                        1,
+                        '0xabc112',
+                        'Kaka',
+                        FEE,
+                        signatureExpTime,
+                        SIGNATUREFALSEUPGRADENFT,
+                        { value: FEE }
+                    )
+            ).to.revertedWith("CollectionController: non-upgradeable collection");
+
+            const collection = await collectionController.collections(1);
+            let nft = NFTFactory.attach(collection.collectionAddress);
+            const tx = await nft.connect(user1).approve(collectionController.address, 1);
+            tx.wait();
+
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        1,
+                        1,
+                        '0xabc125',
+                        '',
+                        FEE,
+                        signatureExpTime + 86400,
+                        SIGNATUREUPGRADENFT,
+                        { value: FEE.sub(1) }
+                    )
+            ).to.revertedWith('CollectionController: wrong fee');
+            let wrongSig = await signatureUpgradeNFTData(
+                2,
+                1,
+                user1.address,
+                FEE,
+                '',
+                '0xabc123',
+                signatureExpTime
+            );
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        2,
+                        1,
+                        '0xabc123',
+                        'Kaka',
+                        FEE,
+                        signatureExpTime,
+                        wrongSig,
+                        {
+                            value: FEE
+                        }
+                    )
+            ).to.revertedWith('CollectionController: invalid signature');
+            let mintedHashSig = await signatureUpgradeNFTData(
+                1,
+                1,
+                user1.address,
+                FEE,
+                '',
+                '0xabc123',
+                signatureExpTime
+            );
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        1,
+                        1,
+                        '0xabc123',
+                        '',
+                        FEE,
+                        signatureExpTime,
+                        mintedHashSig,
+                        { value: FEE }
+                    )
+            ).to.revertedWith('CollectionController: Layer combination already minted');
+
+            await skipTime(86400, ethers);
+            await expect(
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        1,
+                        1,
+                        '0xabc125',
+                        '',
+                        FEE,
+                        signatureExpTime + 86400,
+                        SIGNATUREUPGRADENFT,
+                        { value: FEE }
+                    )
+            ).to.revertedWith('CollectionController: collection ended');
+
+        });
+
+        it('Should upgrade successfully', async () => {
+            const collection = await collectionController.collections(1);
+            let nft = NFTFactory.attach(collection.collectionAddress);
+            const tx = await nft.connect(user1).approve(collectionController.address, 1);
+            tx.wait();
+
+            let oldLayerHash = await collectionController.getLayerHash(1,1);
+            await expect(() =>
+                collectionController
+                    .connect(user1)
+                    .upgradeNFT(
+                        1,
+                        1,
+                        '0xabc125',
+                        '',
+                        FEE,
+                        signatureExpTime + 86400,
+                        SIGNATUREUPGRADENFT,
+                        { value: FEE }
+                    )
+            ).to.changeEtherBalances(
+                [user1, owner, feeTo],
+                [
+                    FEE.mul(-1),
+                    FEE.mul(PERCENT_BASIS_POINT.sub(ROYALTY_FEE)).div(
+                        PERCENT_BASIS_POINT
+                    ),
+                    FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT),
+                ]
+            );
+            let newLayerHash = await collectionController.getLayerHash(1,1);
+            expect(await nft.ownerOf(1)).to.equal(user1.address);
+            const [isOldMinted, oldMinter] = await collectionController.isLayerMinted(oldLayerHash)
+            const [isNewMinted, newMinter] = await collectionController.isLayerMinted(newLayerHash)
+            expect(isOldMinted).to.equal(true)
+            expect(isNewMinted).to.equal(true)
+            expect(oldMinter).to.equal(VERIFIER_ADDRESS)
+            expect(newMinter).to.equal(user1.address)
+        });
+    });
+    //here
     describe('Mint NFT - ERC20 token', () => {
         const FEE = parseEther('0.1');
         let SIGNATURE: string;
@@ -558,7 +854,7 @@ describe('CollectionController', () => {
                         '0xabc123',
                         signatureExpTime,
                         SIGNATURE,
-                        {value: FEE}
+                        { value: FEE }
                     )
             ).to.changeTokenBalances(
                 mockToken,
@@ -573,9 +869,6 @@ describe('CollectionController', () => {
             );
 
             const collection = await collectionController.collections(1);
-            const NFTFactory: NFT__factory = <NFT__factory>(
-                await ethers.getContractFactory('NFT')
-            );
             const nFT = NFTFactory.attach(collection.collectionAddress);
 
             expect(await nFT.ownerOf(1)).to.equal(user1.address);
@@ -716,6 +1009,65 @@ async function signatureData(
     return signature;
 }
 
+async function signatureUpgradeNFTData(
+    collectionId: number,
+    tokenId: number,
+    sender: string,
+    fee: BigNumber,
+    uri: string,
+    newLayerHash: string,
+    signatureExpTime: number
+) {
+    const { chainId } = await ethers.provider.getNetwork();
+    // 66 byte string, which represents 32 bytes of data
+    let messageHash = encodeUpgradeNFTData(
+        chainId,
+        collectionId,
+        tokenId,
+        sender,
+        fee,
+        uri,
+        newLayerHash,
+        signatureExpTime
+    );
+
+    // 32 bytes of data in Uint8Array
+    let messageHashBinary = ethers.utils.arrayify(messageHash);
+
+    let wallet = new ethers.Wallet(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+    );
+
+    // To sign the 32 bytes of data, make sure you pass in the data
+    let signature = await wallet.signMessage(messageHashBinary);
+    return signature;
+}
+
+function encodeUpgradeNFTData(
+    chainId: number,
+    collectionId: number,
+    tokenId: number,
+    sender: string,
+    fee: BigNumber,
+    uri: string,
+    newLayerHash: string,
+    signatureExpTime: number
+) {
+    const payload = ethers.utils.defaultAbiCoder.encode(
+        [
+            'uint256',
+            'uint256',
+            'uint256',
+            'address',
+            'uint256',
+            'string',
+            'bytes',
+            'uint256',
+        ],
+        [chainId, collectionId, tokenId, sender, fee, uri, newLayerHash, signatureExpTime]
+    );
+    return ethers.utils.keccak256(payload);
+}
 function encodeData(
     chainId: number,
     collectionId: number,

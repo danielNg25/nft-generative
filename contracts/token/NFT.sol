@@ -56,6 +56,10 @@ contract NFT is
         _baseUri = baseUri;
     }
 
+    function setTokenURI(uint256 tokenId, string memory newTokenURI) external {
+        super._setTokenURI(tokenId, newTokenURI);
+    }
+
     function baseURI() external view returns (string memory) {
         return _baseURI();
     }
