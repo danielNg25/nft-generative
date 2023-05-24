@@ -55,7 +55,7 @@ describe('CollectionController', () => {
             VERIFIER_ADDRESS,
             ROYALTY_FEE,
             UPGRADE_FEE,
-            ADDRESS_ZERO
+            [ADDRESS_ZERO]
         );
 
         mockToken = <ERC20Token>await MockTokenFactory.deploy();
@@ -249,7 +249,7 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     false,
                     signatureCollection,
-                )).to.revertedWith('GovernorFactory: invalid token payment address');
+                )).to.revertedWith('CollectionController: invalid token payment address');
         });
     });
 
@@ -981,6 +981,19 @@ describe('CollectionController', () => {
         it('Should add paymentToken incorrectly', async () => {
             await collectionController.connect(owner).addPaymentToken(mockToken.address);
             await expect(collectionController.connect(owner).addPaymentToken(mockToken.address)).to.revertedWith("CollectionController: paymentToken address exist");
+        });
+
+        it('Should removed paymentToken incorrectly', async () => {
+            await expect(collectionController.connect(owner).removePaymentToken(mockToken.address)).to.revertedWith("CollectionController: invalid token payment address");
+        });
+
+        it('Should removed paymentToken correctly', async () => {
+            await collectionController.connect(owner).addPaymentToken(mockToken.address);
+            expect(await collectionController.verifiedPaymentTokens(ADDRESS_ZERO)).to.equal(true);
+            expect(await collectionController.verifiedPaymentTokens(mockToken.address)).to.equal(true);
+            await collectionController.connect(owner).removePaymentToken(mockToken.address);
+            expect(await collectionController.verifiedPaymentTokens(ADDRESS_ZERO)).to.equal(true);
+            expect(await collectionController.verifiedPaymentTokens(mockToken.address)).to.equal(false);
         });
 
         it('Should set verifier correctly', async () => {

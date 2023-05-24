@@ -75,6 +75,7 @@ contract CollectionController is
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
     event PaymentTokenAdded(address newAddress);
+    event PaymentTokenRemoved(address removedAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
     event UpgradeFeeChanged(uint256 oldUpgradeFee, uint256 newUpgradeFee);
@@ -132,7 +133,10 @@ contract CollectionController is
     /* ========== MODIFIERS ========== */
 
     modifier isVerifiedToken(address tokenAddress) {
-        require(verifiedPaymentTokens[tokenAddress], "GovernorFactory: invalid token payment address");
+        require(
+            verifiedPaymentTokens[tokenAddress],
+            "CollectionController: invalid token payment address"
+        );
         _;
     }
 
@@ -145,14 +149,14 @@ contract CollectionController is
      * @param _verifier address to verify signature
      * @param _royaltyFee percent of royalty fee received in basis point of 10000
      * @param _upgradeFee fee to create upgradeable collection
-     * @param _paymentToken addresses of valid payment tokens
+     * @param _paymentTokens addresses of valid payment tokens
      */
     function initialize(
         address _feeTo,
         address _verifier,
         uint256 _royaltyFee,
         uint256 _upgradeFee,
-        address _paymentToken
+        address[] memory _paymentTokens
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
@@ -160,7 +164,9 @@ contract CollectionController is
         verifier = _verifier;
         royaltyFee = _royaltyFee;
         upgradeFee = _upgradeFee;
-        verifiedPaymentTokens[_paymentToken] = true;
+        for (uint i = 0; i < _paymentTokens.length; i++) {
+            verifiedPaymentTokens[_paymentTokens[i]] = true;
+        }
     }
 
     /**
@@ -323,12 +329,9 @@ contract CollectionController is
         );
 
         nft.mint(_msgSender(), uri);
-        bytes32 hashNft = hashNFT(
-            tokenId,
-            collectionId
-        );
+        bytes32 hashNft = hashNFT(tokenId, collectionId);
         nftLayerHashes[hashNft] = layerHash;
-        
+
         layerHashes[layerHash] = true;
         layerHashMinters[layerHash] = _msgSender();
         invalidSignatures[signature] = true;
@@ -441,9 +444,9 @@ contract CollectionController is
         layerHashMinters[newLayerHash] = _msgSender();
         invalidSignatures[signature] = true;
 
-        bytes32 hashOldNFT = keccak256(abi.encodePacked(tokenId, collectionId));
-        layerHashMinters[nftLayerHashes[hashOldNFT]] = verifier;
-        nftLayerHashes[hashOldNFT] = newLayerHash;
+        bytes32 nftHash = keccak256(abi.encodePacked(tokenId, collectionId));
+        layerHashMinters[nftLayerHashes[nftHash]] = verifier;
+        nftLayerHashes[nftHash] = newLayerHash;
         emit NFTUpgraded(
             collectionId,
             collection.collectionAddress,
@@ -504,7 +507,7 @@ contract CollectionController is
     }
 
     /**
-     * 
+     *
      * @param tokenId of token
      * @param collectionId of collection contain token
      */
@@ -659,13 +662,16 @@ contract CollectionController is
             _upgradeFee < BASIS_POINT,
             "CollectionController: royaltyFee too large"
         );
-        require(_upgradeFee != oldUpgradeFee, "CollectionController: upgradeFee set");
+        require(
+            _upgradeFee != oldUpgradeFee,
+            "CollectionController: upgradeFee set"
+        );
         upgradeFee = _upgradeFee;
         emit UpgradeFeeChanged(oldUpgradeFee, _upgradeFee);
     }
 
     /**
-     * @dev function to set paymentToken address
+     * @dev function to add paymentToken address
      * @param _paymentToken new paymentToken address
      */
     function addPaymentToken(address _paymentToken) external onlyOwner {
@@ -675,9 +681,19 @@ contract CollectionController is
             "CollectionController: paymentToken address exist"
         );
         verifiedPaymentTokens[paymentToken] = true;
-        emit PaymentTokenAdded(
-            paymentToken
-        );
+        emit PaymentTokenAdded(paymentToken);
+    }
+
+    /**
+     * @dev function to remove paymentToken address
+     * @param _paymentToken removed paymentToken address
+     */
+    function removePaymentToken(
+        address _paymentToken
+    ) external onlyOwner isVerifiedToken(_paymentToken) {
+        address paymentToken = _paymentToken;
+        verifiedPaymentTokens[paymentToken] = false;
+        emit PaymentTokenAdded(paymentToken);
     }
 
     /**
