@@ -19,7 +19,7 @@ describe('CollectionController', () => {
     const ADDRESS_ZERO = '0x0000000000000000000000000000000000000000';
     const VERIFIER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
     const ROYALTY_FEE = BigNumber.from(1000);
-    const UPGRADE_FEE = parseEther('0.1');
+    const UPGRADE_FEE = BigNumber.from(500);
     const PREMIUM_PACKAGE_PRICE = parseEther('0.001');
 
     let owner: SignerWithAddress;
@@ -115,7 +115,6 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     true,
                     signatureCollection,
-                    { value: UPGRADE_FEE }
                 );
             const totalCollection =
                 await collectionController.totalCollection();
@@ -129,14 +128,6 @@ describe('CollectionController', () => {
             expect(collection.endTime).to.equal(timestamp + 86400 * 2);
             expect(collection.upgradeable).to.equal(true);
 
-
-            await expect(tx).to.changeEtherBalances(
-                [user1, feeTo],
-                [
-                    FEE.mul(-1),
-                    FEE,
-                ]
-            );
         });
 
         it('Should create successfully - endTime = 0', async () => {
@@ -169,7 +160,6 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     true,
                     signatureCollection,
-                    { value: UPGRADE_FEE }
                 );
 
             const totalCollection =
@@ -215,7 +205,6 @@ describe('CollectionController', () => {
                     timestamp + 86400,
                     false,
                     signatureCollection,
-                    { value: UPGRADE_FEE }
                 );
 
             const totalCollection =
@@ -229,6 +218,38 @@ describe('CollectionController', () => {
             expect(collection.startTime).to.equal(timestamp + 86400);
             expect(collection.endTime).to.equal(0);
             expect(collection.upgradeable).to.equal(false);
+        });
+        it('Should failed - paymentToken not valid', async () => {
+            let timestamp = (await ethers.provider.getBlock('latest'))
+                .timestamp;
+            let signatureCollection = signatureCollectionData(
+                1,
+                user1.address,
+                'Var NFT Collection',
+                'VAR',
+                '',
+                mockToken.address,
+                1000,
+                timestamp + 86400,
+                0,
+                timestamp + 86400,
+                false
+            );
+            await expect(collectionController
+                .connect(user1)
+                .createCollection(
+                    1,
+                    'Var NFT Collection',
+                    'VAR',
+                    '',
+                    mockToken.address,
+                    1000,
+                    timestamp + 86400,
+                    0,
+                    timestamp + 86400,
+                    false,
+                    signatureCollection,
+                )).to.revertedWith('GovernorFactory: invalid token payment address');
         });
     });
 
@@ -566,7 +587,6 @@ describe('CollectionController', () => {
                     timestamp + 86400 * 2,
                     true,
                     signatureCollection,
-                    { value: FEE }
                 );
 
             await collectionController
@@ -653,6 +673,7 @@ describe('CollectionController', () => {
                 '0xabc112',
                 signatureExpTime
             );
+
             await expect(
                 collectionController
                     .connect(user1)
@@ -664,7 +685,6 @@ describe('CollectionController', () => {
                         FEE,
                         signatureExpTime,
                         SIGNATUREFALSEUPGRADENFT,
-                        { value: FEE }
                     )
             ).to.revertedWith("CollectionController: non-upgradeable collection");
 
@@ -687,6 +707,7 @@ describe('CollectionController', () => {
                         { value: FEE.sub(1) }
                     )
             ).to.revertedWith('CollectionController: wrong fee');
+
             let wrongSig = await signatureUpgradeNFTData(
                 2,
                 1,
@@ -760,7 +781,7 @@ describe('CollectionController', () => {
             const tx = await nft.connect(user1).approve(collectionController.address, 1);
             tx.wait();
 
-            let oldLayerHash = await collectionController.getLayerHash(1,1);
+            let oldLayerHash = await collectionController.getLayerHash(1, 1);
             await expect(() =>
                 collectionController
                     .connect(user1)
@@ -778,13 +799,13 @@ describe('CollectionController', () => {
                 [user1, owner, feeTo],
                 [
                     FEE.mul(-1),
-                    FEE.mul(PERCENT_BASIS_POINT.sub(ROYALTY_FEE)).div(
+                    FEE.mul(PERCENT_BASIS_POINT.sub(UPGRADE_FEE)).div(
                         PERCENT_BASIS_POINT
                     ),
-                    FEE.mul(ROYALTY_FEE).div(PERCENT_BASIS_POINT),
+                    FEE.mul(UPGRADE_FEE).div(PERCENT_BASIS_POINT),
                 ]
             );
-            let newLayerHash = await collectionController.getLayerHash(1,1);
+            let newLayerHash = await collectionController.getLayerHash(1, 1);
             expect(await nft.ownerOf(1)).to.equal(user1.address);
             const [isOldMinted, oldMinter] = await collectionController.isLayerMinted(oldLayerHash)
             const [isNewMinted, newMinter] = await collectionController.isLayerMinted(newLayerHash)
@@ -824,6 +845,7 @@ describe('CollectionController', () => {
                 timestamp + 86400,
                 false
             );
+            await collectionController.connect(owner).addPaymentToken(mockToken.address);
             await collectionController
                 .connect(owner)
                 .createCollection(
@@ -941,6 +963,24 @@ describe('CollectionController', () => {
         it('Should set royaltyFee correctly', async () => {
             await collectionController.connect(owner).setRoyaltyFee(100);
             expect(await collectionController.royaltyFee()).to.equal(100);
+        });
+
+        it('Should set upgradeFee correctly', async () => {
+            await collectionController.connect(owner).setUpgradeFee(100);
+            expect(await collectionController.upgradeFee()).to.equal(100);
+        });
+
+        it('Should add paymentToken correctly', async () => {
+            expect(await collectionController.verifiedPaymentTokens(ADDRESS_ZERO)).to.equal(true);
+            expect(await collectionController.verifiedPaymentTokens(mockToken.address)).to.equal(false);
+            await collectionController.connect(owner).addPaymentToken(mockToken.address);
+            expect(await collectionController.verifiedPaymentTokens(ADDRESS_ZERO)).to.equal(true);
+            expect(await collectionController.verifiedPaymentTokens(mockToken.address)).to.equal(true);
+        });
+
+        it('Should add paymentToken incorrectly', async () => {
+            await collectionController.connect(owner).addPaymentToken(mockToken.address);
+            await expect(collectionController.connect(owner).addPaymentToken(mockToken.address)).to.revertedWith("CollectionController: paymentToken address exist");
         });
 
         it('Should set verifier correctly', async () => {

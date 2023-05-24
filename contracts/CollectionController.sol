@@ -27,7 +27,6 @@ contract CollectionController is
 
     address public feeTo;
 
-    address public upgradeFeeToken;
     uint256 public upgradeFee;
 
     address public verifier;
@@ -52,6 +51,9 @@ contract CollectionController is
     // mapping index to collection
     mapping(uint256 => Collection) public collections;
 
+    // mapping addresses of valid tokens
+    mapping(address => bool) public verifiedPaymentTokens;
+
     // mapping of minted layer id hash
     mapping(bytes => bool) private layerHashes;
 
@@ -72,9 +74,10 @@ contract CollectionController is
 
     event FeeToAddressChanged(address oldAddress, address newAddress);
     event VerifierAddressChanged(address oldAddress, address newAddress);
-    event UpgradeFeeTokenAddressChanged(address oldAddress, address newAddress);
+    event PaymentTokenAdded(address newAddress);
     event RoyaltyFeeToAddressChanged(address oldAddress, address newAddress);
     event RoyaltyFeeChanged(uint256 oldFee, uint256 newFee);
+    event UpgradeFeeChanged(uint256 oldUpgradeFee, uint256 newUpgradeFee);
 
     event CollectionCreated(
         uint256 keyId,
@@ -128,6 +131,11 @@ contract CollectionController is
 
     /* ========== MODIFIERS ========== */
 
+    modifier isVerifiedToken(address tokenAddress) {
+        require(verifiedPaymentTokens[tokenAddress], "GovernorFactory: invalid token payment address");
+        _;
+    }
+
     /* ========== GOVERNANCE ========== */
 
     /**
@@ -137,14 +145,14 @@ contract CollectionController is
      * @param _verifier address to verify signature
      * @param _royaltyFee percent of royalty fee received in basis point of 10000
      * @param _upgradeFee fee to create upgradeable collection
-     * @param _upgradeFeeToken address to receive upgrade fee
+     * @param _paymentToken addresses of valid payment tokens
      */
     function initialize(
         address _feeTo,
         address _verifier,
         uint256 _royaltyFee,
         uint256 _upgradeFee,
-        address _upgradeFeeToken
+        address _paymentToken
     ) public initializer {
         OwnableUpgradeable.__Ownable_init();
         ReentrancyGuardUpgradeable.__ReentrancyGuard_init();
@@ -152,7 +160,7 @@ contract CollectionController is
         verifier = _verifier;
         royaltyFee = _royaltyFee;
         upgradeFee = _upgradeFee;
-        upgradeFeeToken = _upgradeFeeToken;
+        verifiedPaymentTokens[_paymentToken] = true;
     }
 
     /**
@@ -177,7 +185,7 @@ contract CollectionController is
         uint256 signatureExpTime,
         bool upgradeable,
         bytes memory signature
-    ) external payable nonReentrant {
+    ) external isVerifiedToken(paymentToken) {
         require(
             invalidSignatures[signature] == false &&
                 verifyCollectionCreationMessage(
@@ -206,29 +214,6 @@ contract CollectionController is
             (endTime > startTime && endTime > block.timestamp) || endTime == 0,
             "CollectionController: invalid end time"
         );
-
-        if (upgradeable) {
-            if (upgradeFeeToken == address(0)) {
-                require(
-                    msg.value == upgradeFee,
-                    "CollectionController: wrong fee"
-                );
-                payable(feeTo).sendValue(upgradeFee);
-            } else {
-                IERC20Upgradeable(upgradeFeeToken).safeTransferFrom(
-                    _msgSender(),
-                    feeTo,
-                    upgradeFee
-                );
-            }
-
-            emit UpgradeFeeTransferred(
-                keyId,
-                totalCollection + 1,
-                _msgSender(),
-                upgradeFee
-            );
-        }
 
         NFT newNFT = new NFT(name, symbol, baseUri);
         address collectionAddress = address(newNFT);
@@ -375,7 +360,7 @@ contract CollectionController is
 
     /**
      * @dev function for user to upgrade NFT
-     * @param  collectionId of collection
+     * @param collectionId of collection
      * @param tokenId of token
      * @param newLayerHash new layer hash of NFT
      * @param uri new uri of NFT
@@ -430,22 +415,22 @@ contract CollectionController is
             "CollectionController: collection ended"
         );
 
-        uint256 royaltyFeeAmount = (fee * royaltyFee) / BASIS_POINT;
+        uint256 upgradeFeeAmount = (fee * upgradeFee) / BASIS_POINT;
         if (collection.paymentToken == address(0)) {
             require(msg.value == fee, "CollectionController: wrong fee");
 
-            payable(collection.artist).sendValue(fee - royaltyFeeAmount);
-            payable(feeTo).sendValue(royaltyFeeAmount);
+            payable(collection.artist).sendValue(fee - upgradeFeeAmount);
+            payable(feeTo).sendValue(upgradeFeeAmount);
         } else {
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
                 collection.artist,
-                fee - royaltyFeeAmount
+                fee - upgradeFeeAmount
             );
             IERC20Upgradeable(collection.paymentToken).safeTransferFrom(
                 _msgSender(),
                 feeTo,
-                royaltyFeeAmount
+                upgradeFeeAmount
             );
         }
 
@@ -465,7 +450,7 @@ contract CollectionController is
             _msgSender(),
             uri,
             tokenId,
-            royaltyFeeAmount
+            upgradeFeeAmount
         );
     }
 
@@ -656,7 +641,7 @@ contract CollectionController is
     function setRoyaltyFee(uint256 _royaltyFee) external onlyOwner {
         uint256 oldFee = royaltyFee;
         require(
-            royaltyFee < BASIS_POINT,
+            _royaltyFee < BASIS_POINT,
             "CollectionController: royaltyFee too large"
         );
         require(_royaltyFee != oldFee, "CollectionController: royaltyFee set");
@@ -665,19 +650,33 @@ contract CollectionController is
     }
 
     /**
-     * @dev function to set upgradeFeeToken address
-     * @param _upgradeFeeToken new upgradeFeeToken address
+     * @dev function to set upgradeFee
+     * @param _upgradeFee new upgradeFee
      */
-    function setUpgradeFeeToken(address _upgradeFeeToken) external onlyOwner {
-        address oldUpgradeFeeToken = upgradeFeeToken;
+    function setUpgradeFee(uint256 _upgradeFee) external onlyOwner {
+        uint256 oldUpgradeFee = upgradeFee;
         require(
-            _upgradeFeeToken != oldUpgradeFeeToken,
-            "CollectionController: upgradeFeeToken address set"
+            _upgradeFee < BASIS_POINT,
+            "CollectionController: royaltyFee too large"
         );
-        upgradeFeeToken = _upgradeFeeToken;
-        emit UpgradeFeeTokenAddressChanged(
-            oldUpgradeFeeToken,
-            _upgradeFeeToken
+        require(_upgradeFee != oldUpgradeFee, "CollectionController: upgradeFee set");
+        upgradeFee = _upgradeFee;
+        emit UpgradeFeeChanged(oldUpgradeFee, _upgradeFee);
+    }
+
+    /**
+     * @dev function to set paymentToken address
+     * @param _paymentToken new paymentToken address
+     */
+    function addPaymentToken(address _paymentToken) external onlyOwner {
+        address paymentToken = _paymentToken;
+        require(
+            !verifiedPaymentTokens[paymentToken],
+            "CollectionController: paymentToken address exist"
+        );
+        verifiedPaymentTokens[paymentToken] = true;
+        emit PaymentTokenAdded(
+            paymentToken
         );
     }
 
