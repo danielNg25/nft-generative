@@ -444,7 +444,7 @@ contract CollectionController is
         layerHashMinters[newLayerHash] = _msgSender();
         invalidSignatures[signature] = true;
 
-        bytes32 nftHash = keccak256(abi.encodePacked(tokenId, collectionId));
+        bytes32 nftHash = hashNFT(tokenId, collectionId);
         layerHashMinters[nftLayerHashes[nftHash]] = verifier;
         nftLayerHashes[nftHash] = newLayerHash;
         emit NFTUpgraded(
