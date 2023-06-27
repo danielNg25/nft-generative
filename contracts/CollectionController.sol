@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./libraries/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol"; //
+import "./libraries/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "./libraries/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./libraries/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "./libraries/contracts-upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import "./libraries/contracts-upgradeable/utils/AddressUpgradeable.sol";
+import "./libraries/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import {ECDSA} from "./libraries/contracts/utils/cryptography/ECDSA.sol";
 import "./token/NFT.sol";
 
 /**
